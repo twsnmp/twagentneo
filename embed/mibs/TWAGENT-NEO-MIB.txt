@@ -1,0 +1,153 @@
+TWAGENT-NEO-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE,
+    Integer32, enterprises
+        FROM SNMPv2-SMI
+    DisplayString
+        FROM SNMPv2-TC;
+
+twiseLabo OBJECT IDENTIFIER ::= { enterprises 17862 }
+
+twagentNeo MODULE-IDENTITY
+    LAST-UPDATED "202609220000Z"
+    ORGANIZATION "Twise Labo"
+    CONTACT-INFO "https://github.com/twsnmp/twagentneo"
+    DESCRIPTION
+        "MIB for twagentneo - AI Security Monitoring Agent"
+    ::= { twiseLabo 3 }
+
+twagentNeoObjects  OBJECT IDENTIFIER ::= { twagentNeo 1 }
+twagentNeoTraps    OBJECT IDENTIFIER ::= { twagentNeo 2 }
+
+-- ===== Info Objects =====
+
+twagentNeoInfo OBJECT IDENTIFIER ::= { twagentNeoObjects 1 }
+
+twagentNeoVersion OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "twagentneo version string"
+    ::= { twagentNeoInfo 1 }
+
+twagentNeoHostname OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Hostname of the monitored system"
+    ::= { twagentNeoInfo 2 }
+
+twagentNeoOS OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Operating system (linux | windows | darwin)"
+    ::= { twagentNeoInfo 3 }
+
+-- ===== Trap Varbind Objects =====
+
+twagentNeoTrapObjects OBJECT IDENTIFIER ::= { twagentNeoObjects 2 }
+
+twagentNeoTrapSeverity OBJECT-TYPE
+    SYNTAX      INTEGER { info(1), warn(2), high(3), critical(4) }
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION "Alert severity level"
+    ::= { twagentNeoTrapObjects 1 }
+
+twagentNeoTrapCategory OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION "Alert category (e.g. Authentication, FIM, Resource)"
+    ::= { twagentNeoTrapObjects 2 }
+
+twagentNeoTrapRuleTitle OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION "Sigma rule title or description"
+    ::= { twagentNeoTrapObjects 3 }
+
+twagentNeoTrapAIJudge OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION "AI judge summary (e.g. Threat:YES, CompViolation:YES, Conf:0.92)"
+    ::= { twagentNeoTrapObjects 4 }
+
+twagentNeoTrapAISummary OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION "AI-generated Japanese summary of the alert"
+    ::= { twagentNeoTrapObjects 5 }
+
+twagentNeoTrapAIAction OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION "AI-recommended remediation action in Japanese"
+    ::= { twagentNeoTrapObjects 6 }
+
+-- ===== Notification Definitions =====
+
+twagentNeoTrapsPrefix OBJECT IDENTIFIER ::= { twagentNeoTraps 0 }
+
+twagentNeoResourceAlert NOTIFICATION-TYPE
+    OBJECTS {
+        twagentNeoHostname,
+        twagentNeoTrapSeverity,
+        twagentNeoTrapCategory,
+        twagentNeoTrapRuleTitle
+    }
+    STATUS  current
+    DESCRIPTION
+        "Sent when a host resource metric (CPU, memory, disk) exceeds
+         its configured threshold."
+    ::= { twagentNeoTrapsPrefix 1 }
+
+twagentNeoSecurityAlert NOTIFICATION-TYPE
+    OBJECTS {
+        twagentNeoHostname,
+        twagentNeoTrapSeverity,
+        twagentNeoTrapCategory,
+        twagentNeoTrapRuleTitle,
+        twagentNeoTrapAIJudge,
+        twagentNeoTrapAISummary,
+        twagentNeoTrapAIAction
+    }
+    STATUS  current
+    DESCRIPTION
+        "Sent when a Sigma rule matches a log event. May include AI judge
+         fields when the tensai local LLM is enabled."
+    ::= { twagentNeoTrapsPrefix 2 }
+
+twagentNeoFIMAlert NOTIFICATION-TYPE
+    OBJECTS {
+        twagentNeoHostname,
+        twagentNeoTrapSeverity,
+        twagentNeoTrapCategory,
+        twagentNeoTrapRuleTitle
+    }
+    STATUS  current
+    DESCRIPTION
+        "Sent when file integrity monitoring detects an unauthorized change."
+    ::= { twagentNeoTrapsPrefix 3 }
+
+twagentNeoHeartbeat NOTIFICATION-TYPE
+    OBJECTS {
+        twagentNeoHostname,
+        twagentNeoVersion,
+        twagentNeoOS,
+        twagentNeoTrapSeverity,
+        twagentNeoTrapCategory,
+        twagentNeoTrapRuleTitle
+    }
+    STATUS  current
+    DESCRIPTION
+        "Periodic keep-alive trap to confirm the agent is operational."
+    ::= { twagentNeoTrapsPrefix 4 }
+
+END

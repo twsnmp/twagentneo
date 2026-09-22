@@ -1,0 +1,59 @@
+agent:
+  id: "twagentneo-server-01"
+  name: "Host-01"
+  log_level: "info"
+
+collectors:
+  resource:
+    enabled: true
+    interval: 60s
+  network:
+    enabled: true
+    interval: 180s
+    arp_watch: true
+  fim:
+    enabled: true
+    paths:
+      # Linux defaults
+      - /etc
+      - /usr/bin
+      - /usr/sbin
+      # Windows defaults (ignored on non-Windows)
+      # - C:\Windows\System32
+  logs:
+    enabled: true
+
+# 2段階監査設定
+audit:
+  sigma:
+    enabled: true              # 内蔵Sigmaルール自動実行
+  ai_judge:
+    enabled: true              # tensai パッケージによるローカルLLM判定
+    model_path: ""             # 指定時はカスタムモデルパス、空の場合はtensaiデフォルト
+    timeout: 5s                # 推論タイムアウト
+
+exporters:
+  mqtt:
+    enabled: true
+    broker: "tls://twsnmp-neo-server:8883"
+    client_id: "twagentneo-01"
+    topic_prefix: "twsnmpneo/agent"
+    username: "twagentneo"
+    password: "${MQTT_PASSWORD}"
+
+  syslog:
+    enabled: false
+    endpoint: "udp://twsnmp-neo-server:514"
+    format: "rfc5424"
+
+  snmp_trap:
+    enabled: true
+    target: "twsnmp-neo-server:162"
+    version: "v3"
+    community: "public"
+    v3:
+      user: "twsnmpUser"
+      auth_protocol: "SHA256"
+      auth_password: "${TRAP_AUTH_PASS}"
+      priv_protocol: "AES128"
+      priv_password: "${TRAP_PRIV_PASS}"
