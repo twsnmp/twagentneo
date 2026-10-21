@@ -86,6 +86,16 @@ func (e *SyslogExporter) SendFIM(ev *audit.FIMEvent) error {
 	return e.send(msg)
 }
 
+// SendResourceAlert sends a resource alert as a syslog message.
+func (e *SyslogExporter) SendResourceAlert(ra *audit.ResourceAlert) error {
+	sd := fmt.Sprintf(`[twsnmpneo@17862 resource="%s" val="%.1f" thresh="%.1f"]`,
+		ra.Resource, ra.Value, ra.Threshold)
+	msg := e.rfc5424(syslogSeverity("warn"), "twagentneo-resource", sd,
+		fmt.Sprintf("Resource %s exceeded threshold: %.1f%% (threshold: %.1f%%)",
+			ra.Resource, ra.Value, ra.Threshold))
+	return e.send(msg)
+}
+
 // rfc5424 formats a message according to RFC 5424.
 // facility=1 (user), priority = facility*8 + severity.
 func (e *SyslogExporter) rfc5424(severity int, appName, structuredData, msg string) string {

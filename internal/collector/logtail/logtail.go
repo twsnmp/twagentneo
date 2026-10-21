@@ -45,7 +45,7 @@ func New(sources []string) *Tailer {
 func (t *Tailer) Start() {
 	for _, src := range t.sources {
 		t.wg.Add(1)
-		go t.tailFile(src)
+		go t.tailSource(src)
 	}
 }
 

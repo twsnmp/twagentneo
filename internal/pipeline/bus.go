@@ -4,6 +4,7 @@ package pipeline
 
 import (
 	"log"
+	"sync"
 	"time"
 )
 
@@ -11,12 +12,13 @@ import (
 type EventType int
 
 const (
-	EventTypeMetrics   EventType = iota // host resource metrics
-	EventTypeNetwork                    // ARP / network state
-	EventTypeAlert                      // security alert (Sigma + AI judge)
-	EventTypeFIM                        // file integrity event
-	EventTypeHeartbeat                  // periodic heartbeat
-	EventTypeRawLog                     // raw log line from logtail (pre-Sigma)
+	EventTypeMetrics       EventType = iota // host resource metrics
+	EventTypeNetwork                        // ARP / network state
+	EventTypeAlert                          // security alert (Sigma + AI judge)
+	EventTypeFIM                            // file integrity event
+	EventTypeHeartbeat                      // periodic heartbeat
+	EventTypeRawLog                         // raw log line from logtail (pre-Sigma)
+	EventTypeResourceAlert                  // host resource threshold alert
 )
 
 // FIMPayload wraps a file integrity event for the event bus.
@@ -43,74 +45,71 @@ type Sub struct {
 	bus  *Bus
 }
 
-// Close unregisters the subscription and drains the channel.
+// Close unregisters the subscription and closes the channel safely.
 func (s *Sub) Close() {
-	s.bus.unsubscribe <- s.ch
+	s.bus.mu.Lock()
+	defer s.bus.mu.Unlock()
+
+	if _, ok := s.bus.subs[s.ch]; ok {
+		delete(s.bus.subs, s.ch)
+		close(s.ch)
+	}
 }
 
 // Bus is a multi-subscriber, non-blocking event dispatcher.
 type Bus struct {
-	in          chan *Event
-	subscribe   chan chan *Event
-	unsubscribe chan chan *Event
-	done        chan struct{}
+	mu   sync.RWMutex
+	subs map[chan *Event]struct{}
+	done chan struct{}
 }
 
 const (
-	busBufferSize = 4096
 	subBufferSize = 256
 )
 
 // New creates and starts a Bus. Call Stop() to shut it down cleanly.
 func New() *Bus {
-	b := &Bus{
-		in:          make(chan *Event, busBufferSize),
-		subscribe:   make(chan chan *Event, 8),
-		unsubscribe: make(chan chan *Event, 8),
-		done:        make(chan struct{}),
-	}
-	go b.run()
-	return b
-}
-
-// run is the Bus dispatch loop.
-func (b *Bus) run() {
-	subs := make(map[chan *Event]struct{})
-	for {
-		select {
-		case <-b.done:
-			return
-
-		case ch := <-b.subscribe:
-			subs[ch] = struct{}{}
-
-		case ch := <-b.unsubscribe:
-			delete(subs, ch)
-			close(ch)
-
-		case ev := <-b.in:
-			for ch := range subs {
-				select {
-				case ch <- ev:
-				default:
-					log.Printf("[pipeline] subscriber slow, event type=%d dropped", ev.Type)
-				}
-			}
-		}
+	return &Bus{
+		subs: make(map[chan *Event]struct{}),
+		done: make(chan struct{}),
 	}
 }
 
-// Stop shuts down the Bus dispatch loop.
+// Stop shuts down the Bus and closes all remaining subscribers.
 func (b *Bus) Stop() {
-	close(b.done)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	select {
+	case <-b.done:
+		return
+	default:
+		close(b.done)
+	}
+
+	for ch := range b.subs {
+		delete(b.subs, ch)
+		close(ch)
+	}
 }
 
-// Publish sends an event to the bus non-blocking.
+// Publish sends an event to all subscribers non-blocking.
 func (b *Bus) Publish(ev *Event) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
 	select {
-	case b.in <- ev:
+	case <-b.done:
+		return
 	default:
-		log.Printf("[pipeline] bus input full, event type=%d dropped", ev.Type)
+	}
+
+	for ch := range b.subs {
+		select {
+		case ch <- ev:
+		default:
+			log.Printf("[pipeline] subscriber slow, event type=%d dropped", ev.Type)
+		}
 	}
 }
 
@@ -134,10 +133,22 @@ func (b *Bus) PublishFIM(payload interface{}) {
 	b.Publish(&Event{Type: EventTypeFIM, Timestamp: time.Now(), Payload: payload})
 }
 
+// PublishHeartbeat is a convenience helper for periodic heartbeat events.
+func (b *Bus) PublishHeartbeat() {
+	b.Publish(&Event{Type: EventTypeHeartbeat, Timestamp: time.Now()})
+}
+
+// PublishResourceAlert is a convenience helper for resource threshold alert events.
+func (b *Bus) PublishResourceAlert(payload interface{}) {
+	b.Publish(&Event{Type: EventTypeResourceAlert, Timestamp: time.Now(), Payload: payload})
+}
+
 // Subscribe registers a new subscriber and returns a *Sub handle.
 // The caller MUST call sub.Close() when done to avoid goroutine leaks.
 func (b *Bus) Subscribe() *Sub {
 	ch := make(chan *Event, subBufferSize)
-	b.subscribe <- ch
+	b.mu.Lock()
+	b.subs[ch] = struct{}{}
+	b.mu.Unlock()
 	return &Sub{C: ch, ch: ch, bus: b}
 }

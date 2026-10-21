@@ -33,4 +33,5 @@ go.work.sum
 
 # Build output
 dist/
-twagentneo
+/twagentneo
+config.yaml

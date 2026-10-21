@@ -116,6 +116,11 @@ func (e *MQTTExporter) PublishFIM(ev *audit.FIMEvent) error {
 	return e.publish(e.topic("alert"), 1, false, ev)
 }
 
+// PublishResourceAlert sends a host resource threshold alert.
+func (e *MQTTExporter) PublishResourceAlert(ra *audit.ResourceAlert) error {
+	return e.publish(e.topic("alert"), 1, false, ra)
+}
+
 // PublishHeartbeat sends a periodic keep-alive status.
 func (e *MQTTExporter) PublishHeartbeat() error {
 	return e.publishStatus("online")

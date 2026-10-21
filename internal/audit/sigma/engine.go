@@ -103,9 +103,9 @@ func (e *Engine) getSigmaConfig(r *gosigma.Rule) *gosigma.Config {
 	return nil
 }
 
-// loadWazuhDecoders adds Wazuh-specific named-capture patterns for Linux log decoding.
+// loadWazuhDecoders adds Wazuh-specific named-capture patterns for Unix/Linux log decoding.
 func (e *Engine) loadWazuhDecoders() {
-	if e.osLabel != "linux" {
+	if e.osLabel != "linux" && e.osLabel != "darwin" {
 		return
 	}
 	for _, pat := range wazuhLinuxDecoders {

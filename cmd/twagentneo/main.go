@@ -126,7 +126,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		runDispatch(ctx, bus, mqttExp, syslogExp, trapExp, sigmaEngine, judge)
+		runDispatch(ctx, bus, mqttExp, syslogExp, trapExp)
 	}()
 
 	// --- Resource Collector ---
@@ -156,12 +156,12 @@ func main() {
 		}()
 	}
 
-	// --- Log Tailer ---
+	// --- Log Tailer & Audit Pipeline ---
 	if cfg.Collectors.Logs.Enabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runLogTailer(ctx, bus)
+			runLogTailerAndAudit(ctx, bus, sigmaEngine, judge)
 		}()
 	}
 
@@ -180,15 +180,12 @@ func main() {
 }
 
 // runDispatch reads events from the bus and routes them to exporters.
-// It also runs Sigma evaluation and AI judge on log events.
 func runDispatch(
 	ctx context.Context,
 	bus *pipeline.Bus,
 	mqttExp *exporter.MQTTExporter,
 	syslogExp *exporter.SyslogExporter,
 	trapExp *exporter.SNMPTrapExporter,
-	sigmaEngine *sigma.Engine,
-	judge *aijudge.Judge,
 ) {
 	sub := bus.Subscribe()
 	defer sub.Close()
@@ -201,7 +198,7 @@ func runDispatch(
 			if !ok {
 				return
 			}
-			dispatchEvent(ev, mqttExp, syslogExp, trapExp, sigmaEngine, judge)
+			dispatchEvent(ev, mqttExp, syslogExp, trapExp)
 		}
 	}
 }
@@ -211,8 +208,6 @@ func dispatchEvent(
 	mqttExp *exporter.MQTTExporter,
 	syslogExp *exporter.SyslogExporter,
 	trapExp *exporter.SNMPTrapExporter,
-	sigmaEngine *sigma.Engine,
-	judge *aijudge.Judge,
 ) {
 	switch ev.Type {
 	case pipeline.EventTypeMetrics:
@@ -259,6 +254,21 @@ func dispatchEvent(
 			_ = trapExp.SendSecurityAlert(alert)
 		}
 
+	case pipeline.EventTypeResourceAlert:
+		ra, ok := ev.Payload.(*audit.ResourceAlert)
+		if !ok {
+			return
+		}
+		if mqttExp != nil {
+			_ = mqttExp.PublishResourceAlert(ra)
+		}
+		if syslogExp != nil {
+			_ = syslogExp.SendResourceAlert(ra)
+		}
+		if trapExp != nil {
+			_ = trapExp.SendResourceAlert(ra)
+		}
+
 	case pipeline.EventTypeHeartbeat:
 		if trapExp != nil {
 			_ = trapExp.SendHeartbeat()
@@ -269,7 +279,7 @@ func dispatchEvent(
 	}
 }
 
-// runResourceCollector periodically collects host resource metrics.
+// runResourceCollector periodically collects host resource metrics and evaluates thresholds.
 func runResourceCollector(ctx context.Context, bus *pipeline.Bus, cfg config.ResourceCollectorConfig) {
 	collector := resource.New()
 	var prev *resource.Metrics
@@ -288,7 +298,58 @@ func runResourceCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Res
 			}
 			prev = m
 			bus.PublishMetrics(m)
+			checkResourceThresholds(m, cfg, bus)
 		}
+	}
+}
+
+// checkResourceThresholds evaluates measured metrics against configured thresholds.
+func checkResourceThresholds(m *resource.Metrics, cfg config.ResourceCollectorConfig, bus *pipeline.Bus) {
+	now := time.Now()
+
+	// CPU check
+	if cfg.CPUThreshold > 0 && m.CPUPercent >= cfg.CPUThreshold {
+		bus.PublishResourceAlert(&audit.ResourceAlert{
+			Timestamp: now,
+			Resource:  "cpu",
+			Threshold: cfg.CPUThreshold,
+			Value:     m.CPUPercent,
+		})
+	}
+
+	// Memory check
+	if cfg.MemThreshold > 0 && m.MemPercent >= cfg.MemThreshold {
+		bus.PublishResourceAlert(&audit.ResourceAlert{
+			Timestamp: now,
+			Resource:  "mem",
+			Threshold: cfg.MemThreshold,
+			Value:     m.MemPercent,
+		})
+	}
+
+	// Disk check
+	if cfg.DiskThreshold > 0 {
+		for _, d := range m.Disks {
+			if d.UsedPercent >= cfg.DiskThreshold {
+				bus.PublishResourceAlert(&audit.ResourceAlert{
+					Timestamp: now,
+					Resource:  "disk",
+					MountPath: d.MountPoint,
+					Threshold: cfg.DiskThreshold,
+					Value:     d.UsedPercent,
+				})
+			}
+		}
+	}
+
+	// Load Average check (Unix)
+	if cfg.LoadThreshold > 0 && m.LoadAvg1 >= cfg.LoadThreshold {
+		bus.PublishResourceAlert(&audit.ResourceAlert{
+			Timestamp: now,
+			Resource:  "load",
+			Threshold: cfg.LoadThreshold,
+			Value:     m.LoadAvg1,
+		})
 	}
 }
 
@@ -338,11 +399,52 @@ func runFIMCollector(ctx context.Context, bus *pipeline.Bus, cfg config.FIMColle
 	}
 }
 
-// runLogTailer starts tailing OS security logs and feeds them through Sigma.
-func runLogTailer(ctx context.Context, bus *pipeline.Bus) {
+// runLogTailerAndAudit starts tailing OS security logs, runs Sigma Tier-1 matching,
+// evaluates candidate alerts with Tier-2 local LLM (AI Judge), and publishes enriched alerts.
+func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, sigmaEngine *sigma.Engine, judge *aijudge.Judge) {
+	if sigmaEngine == nil {
+		log.Println("[audit] sigma engine is not active, skipping log tailing")
+		return
+	}
+
 	tailer := logtail.New(nil) // nil = use OS defaults
 	tailer.Start()
 	defer tailer.Stop()
+
+	// Sliding window for recent log context lines (up to 20 lines)
+	const maxContextLogs = 20
+	var contextHistory []string
+
+	// Asynchronous task queue for AI Judge to avoid blocking log processing
+	type judgeTask struct {
+		alert       *audit.SecurityAlert
+		contextLogs []string
+	}
+	judgeQueue := make(chan judgeTask, 32)
+
+	var judgeWg sync.WaitGroup
+	judgeWg.Add(1)
+	go func() {
+		defer judgeWg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case task, ok := <-judgeQueue:
+				if !ok {
+					return
+				}
+				if judge != nil {
+					task.alert.AIJudge = judge.Evaluate(task.alert, task.contextLogs)
+				}
+				bus.PublishAlert(task.alert)
+			}
+		}
+	}()
+	defer func() {
+		close(judgeQueue)
+		judgeWg.Wait()
+	}()
 
 	for {
 		select {
@@ -352,12 +454,53 @@ func runLogTailer(ctx context.Context, bus *pipeline.Bus) {
 			if !ok {
 				return
 			}
-			// Forward to the alert dispatcher via the internal bus.
-			bus.Publish(&pipeline.Event{
-				Type:      pipeline.EventTypeRawLog,
-				Timestamp: ev.Timestamp,
-				Payload:   ev,
-			})
+
+			// Update context history
+			if len(contextHistory) >= maxContextLogs {
+				contextHistory = contextHistory[1:]
+			}
+			contextHistory = append(contextHistory, ev.Line)
+
+			// Tier-1: Sigma rule evaluation
+			matches := sigmaEngine.MatchAll(ev.Line, ev.Timestamp.UnixNano())
+			if len(matches) == 0 {
+				continue
+			}
+
+			matchedData := sigmaEngine.ParseLogData(ev.Line)
+
+			for _, entry := range matches {
+				rule := entry.Evaluator.Rule
+				cat := rule.Logsource.Category
+				if cat == "" {
+					cat = rule.Logsource.Product
+				}
+				if cat == "" {
+					cat = "Security"
+				}
+
+				alert := &audit.SecurityAlert{
+					Timestamp:   ev.Timestamp,
+					RuleID:      rule.ID,
+					RuleTitle:   rule.Title,
+					Level:       rule.Level,
+					Category:    cat,
+					SourceLog:   ev.Source,
+					MatchedData: matchedData,
+				}
+
+				// Context snapshot for AI Judge
+				ctxCopy := make([]string, len(contextHistory))
+				copy(ctxCopy, contextHistory)
+
+				// Queue for Tier-2 AI Judge, or fallback to immediate publish if queue is full
+				select {
+				case judgeQueue <- judgeTask{alert: alert, contextLogs: ctxCopy}:
+				default:
+					log.Printf("[audit] judge queue full, emitting rule %s without AI judge", alert.RuleID)
+					bus.PublishAlert(alert)
+				}
+			}
 		}
 	}
 }

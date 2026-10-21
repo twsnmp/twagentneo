@@ -19,8 +19,12 @@ type AgentConfig struct {
 
 // ResourceCollectorConfig holds configuration for the resource collector.
 type ResourceCollectorConfig struct {
-	Enabled  bool          `mapstructure:"enabled"`
-	Interval time.Duration `mapstructure:"interval"`
+	Enabled       bool          `mapstructure:"enabled"`
+	Interval      time.Duration `mapstructure:"interval"`
+	CPUThreshold  float64       `mapstructure:"cpu_threshold"`  // % threshold (0 to disable)
+	MemThreshold  float64       `mapstructure:"mem_threshold"`  // % threshold (0 to disable)
+	DiskThreshold float64       `mapstructure:"disk_threshold"` // % threshold (0 to disable)
+	LoadThreshold float64       `mapstructure:"load_threshold"` // LoadAvg1 threshold (0 to disable)
 }
 
 // NetworkCollectorConfig holds configuration for the network/ARP collector.
@@ -143,6 +147,9 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("agent.log_level", "info")
 	v.SetDefault("collectors.resource.enabled", true)
 	v.SetDefault("collectors.resource.interval", "60s")
+	v.SetDefault("collectors.resource.cpu_threshold", 90.0)
+	v.SetDefault("collectors.resource.mem_threshold", 90.0)
+	v.SetDefault("collectors.resource.disk_threshold", 90.0)
 	v.SetDefault("collectors.network.enabled", true)
 	v.SetDefault("collectors.network.interval", "180s")
 	v.SetDefault("collectors.network.arp_watch", true)
