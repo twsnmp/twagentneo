@@ -318,12 +318,38 @@ exporters:
 
 ---
 
-## 9. Build Requirements
+## 9. Build, Packaging & Release Specification
 
-- **CGO Disabled (Pure Go Single Binary)**:
-  ```bash
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o twagentneo-linux-amd64 ./cmd/twagentneo
-  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o twagentneo-windows-amd64.exe ./cmd/twagentneo
-  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o twagentneo-darwin-arm64 ./cmd/twagentneo
-  ```
-- Binary is packaged with zero external runtime or configuration requirements.
+### 9.1 Build System & Toolchain
+- **Build with mise (`mise.toml`)**:
+  - Toolchain: `go = "1.27"`
+  - Tasks:
+    - `mise run build`: Compile release binary with embedded version (`-X main.version`), commit hash (`-X main.commit`), and build timestamp (`-X main.date`).
+    - `mise run build-debug`: Compile debug binary with symbol tables.
+    - `mise run test`: Execute unit tests with race detection (`go test -race -v ./...`).
+- **Pure Go Single Binary (`CGO_ENABLED=0`)**:
+  - Statically linked single binary without external C dependencies across Linux, Windows, and macOS (amd64 and arm64).
+
+### 9.2 Release & Distribution Pipeline
+- **GitHub Actions & GoReleaser (`.goreleaser.yaml`)**:
+  - Automated cross-compilation on tag push (`v*`) or manual workflow dispatch.
+  - Multi-platform packaging: `.tar.gz` for Linux/macOS, `.zip` for Windows.
+- **Homebrew Formula (macOS / Linux)**:
+  - Automatically publishes and updates `Formula/twagentneo.rb` in `twsnmp/homebrew-tap` via GoReleaser.
+- **One-Liner Installation Script (`install/install.sh`)**:
+  - Fetches the latest compatible release asset and installs to `/usr/local/bin`:
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/twsnmp/twagentneo/main/install/install.sh | sh
+    ```
+
+### 9.3 Self-Update & CLI Operations
+- **CLI Commands & Flags**:
+  - `twagentneo -version` / `twagentneo version`: Displays semantic version, git commit hash, build timestamp, and runtime architecture.
+  - `twagentneo update`: Automatically checks GitHub Releases and safely replaces the running executable.
+  - `twagentneo update -check` (or `-check-update`): Checks for available updates without applying.
+  - `twagentneo update -yes`: Applies the update without interactive confirmation prompts.
+  - `twagentneo update -version <tag>`: Updates or rollbacks to a specific release tag.
+- **Environment-Aware Update Safety (`internal/updater`)**:
+  - **Homebrew**: Detects Homebrew installation path and prompts the user to run `brew upgrade twagentneo`.
+  - **Containers**: Detects container environments and prompts image pulling.
+  - **Standalone Binaries**: Atomic executable replacement (`os.Rename` with rollback backup on Unix/macOS and Windows `.bak` rotation).

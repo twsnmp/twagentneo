@@ -1,0 +1,49 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: twagentneo
+    main: ./cmd/twagentneo
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Tag}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [ 'tar.gz' ]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  mode: replace
+
+brews:
+  - repository:
+      owner: twsnmp
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/twsnmp/twagentneo"
+    description: "AI Security Monitoring Agent for TWSNMP NEO"
+    license: "Apache 2.0"
+    directory: Formula

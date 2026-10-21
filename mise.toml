@@ -1,0 +1,54 @@
+[tools]
+go = "1.27"
+
+[tasks.test]
+description = "Run backend unit tests with race detection"
+run = "go test -race -v ./..."
+
+[tasks.build]
+description = "Compile release binary with version and git commit"
+run = '''
+VERSION="${VERSION:-$(git describe --tags --always 2>/dev/null || echo "v0.1.0")}"
+COMMIT="${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "none")}"
+DATE="${DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --version|-v)
+      VERSION="$2"
+      shift 2
+      ;;
+    --commit|-c)
+      COMMIT="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+echo "Building twagentneo (Version: ${VERSION}, Commit: ${COMMIT})..."
+mkdir -p dist
+go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o dist/twagentneo ./cmd/twagentneo
+'''
+
+[tasks.build-debug]
+description = "Compile debug binary"
+run = '''
+VERSION="${VERSION:-$(git describe --tags --always 2>/dev/null || echo "v0.1.0")}"
+COMMIT="${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "none")}"
+DATE="${DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}"
+mkdir -p dist
+go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o dist/twagentneo ./cmd/twagentneo
+'''
+
+[tasks.run-debug]
+description = "Execute twagentneo in debug mode"
+run = "go run ./cmd/twagentneo/ -config config.yaml"
+
+[tasks.tidy]
+description = "Tidy Go module dependencies"
+run = "go mod tidy"
+
+[tasks.clean]
+description = "Clean up built binaries and dist directory"
+run = "rm -rf dist/ twagentneo"

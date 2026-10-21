@@ -1,6 +1,6 @@
 module github.com/twsnmp/twagentneo
 
-go 1.23.0
+go 1.27
 
 require (
 	github.com/bradleyjkemp/sigma-go v0.6.6
@@ -39,6 +39,7 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/text v0.21.0 // indirect

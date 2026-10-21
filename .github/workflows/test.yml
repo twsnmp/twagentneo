@@ -1,0 +1,30 @@
+name: CI / Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit Tests & Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Run Tests with Race Detection
+        run: go test -race -v ./...
+
+      - name: Build Agent Binary
+        run: go build -v ./cmd/twagentneo

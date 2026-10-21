@@ -316,12 +316,39 @@ exporters:
 
 ---
 
-## 9. ビルド要件
+## 9. ビルド・パッケージング・配信仕様
 
+### 9.1 ビルドシステムとツールチェーン
+- **miseによるビルド管理 (`mise.toml`)**:
+  - ツールチェーン: `go = "1.27"`
+  - タスク:
+    - `mise run build`: バージョン（`-X main.version`）、コミットハッシュ（`-X main.commit`）、ビルド日時（`-X main.date`）を注入した本番バイナリのビルド。
+    - `mise run build-debug`: シンボルを残したデバッグ用バイナリのビルド。
+    - `mise run test`: レース検出付きユニットテストの実行 (`go test -race -v ./...`)。
 - **CGO完全無効化（静的シングルバイナリ）**:
-  ```bash
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o twagentneo-linux-amd64 ./cmd/twagentneo
-  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o twagentneo-windows-amd64.exe ./cmd/twagentneo
-  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o twagentneo-darwin-arm64 ./cmd/twagentneo
-  ```
+  - 外部Cライブラリへの依存ゼロ (`CGO_ENABLED=0`)。Linux, Windows, macOS (amd64 / arm64) 向けクロスコンパイル対応。
+
+### 9.2 リリース・配信パイプライン
+- **GitHub Actions & GoReleaser (`.goreleaser.yaml`)**:
+  - Gitタグ (`v*`) のプッシュまたは手動実行で自動クロスコンパイルとGitHub Releases公開。
+  - Linux/macOSは `.tar.gz`、Windowsは `.zip` としてパッケージング。
+- **Homebrew Formula 対応 (macOS / Linux)**:
+  - GoReleaserにより `twsnmp/homebrew-tap` 内の `Formula/twagentneo.rb` を自動更新・配信。
+- **インストールスクリプト (`install/install.sh`)**:
+  - OS/Arch自動判別によるワンライナーインストール:
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/twsnmp/twagentneo/main/install/install.sh | sh
+    ```
+
+### 9.3 セルフアップデート機能 & CLI仕様
+- **CLIコマンド・フラグ**:
+  - `twagentneo -version` / `twagentneo version`: バージョン番号、Gitコミットハッシュ、ビルド日時、実行アーキテクチャを表示。
+  - `twagentneo update`: GitHub Releasesの最新版を取得しバイナリを安全に自己置換。
+  - `twagentneo update -check` (または `-check-update`): 更新確認のみ実施。
+  - `twagentneo update -yes`: 確認プロンプトをスキップして即時更新。
+  - `twagentneo update -version <tag>`: 指定したバージョンへ更新/ロールバック。
+- **環境に配慮した更新ガード (`internal/updater`)**:
+  - **Homebrew環境**: 自動検知し、`brew upgrade twagentneo` の実行を案内。
+  - **コンテナ環境**: コンテナ内更新を抑止し、イメージの再取得を案内。
+  - **通常バイナリ**: Unix/macOSのアトミック置換 (`os.Rename`) およびWindowsの `.bak` 退避置換による安全な自己更新。
   
