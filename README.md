@@ -72,3 +72,10 @@ twagentneo update -check
 twagentneo update
 ```
 
+---
+
+## Testing & Verification
+
+For instructions on how to test **Sigma rules** and **File Integrity Monitoring (FIM)** alerts locally without administrator privileges, see [TESTING.md](TESTING.md).
+
+

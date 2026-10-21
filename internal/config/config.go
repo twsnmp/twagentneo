@@ -42,7 +42,8 @@ type FIMCollectorConfig struct {
 
 // LogsCollectorConfig holds configuration for the log tailer.
 type LogsCollectorConfig struct {
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool     `mapstructure:"enabled"`
+	Paths   []string `mapstructure:"paths"`
 }
 
 // CollectorsConfig groups all collector configurations.

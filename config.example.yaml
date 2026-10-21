@@ -22,6 +22,11 @@ collectors:
       # - C:\Windows\System32
   logs:
     enabled: true
+    paths:
+      # Optional: custom log paths to tail (uses OS defaults if omitted or empty)
+      # - /tmp/test.log
+      # Linux defaults: /var/log/auth.log, /var/log/secure, /var/log/syslog
+      # macOS defaults: /var/log/install.log, /var/log/system.log
 
 # 2段階監査設定
 audit:

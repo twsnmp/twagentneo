@@ -346,7 +346,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runLogTailerAndAudit(ctx, bus, sigmaEngine, judge)
+			runLogTailerAndAudit(ctx, bus, cfg.Collectors.Logs, sigmaEngine, judge)
 		}()
 	}
 
@@ -421,6 +421,7 @@ func dispatchEvent(
 		if !ok {
 			return
 		}
+		log.Printf("[fim] alert: op=%s path=%s hash=%s", fimEv.Op, fimEv.Path, fimEv.Hash)
 		if mqttExp != nil {
 			_ = mqttExp.PublishFIM(fimEv)
 		}
@@ -435,6 +436,12 @@ func dispatchEvent(
 		alert, ok := ev.Payload.(*audit.SecurityAlert)
 		if !ok {
 			return
+		}
+		log.Printf("[alert] sigma alert: rule=%s title=%q level=%s category=%s source=%s",
+			alert.RuleID, alert.RuleTitle, alert.Level, alert.Category, alert.SourceLog)
+		if alert.AIJudge != nil {
+			log.Printf("[alert] ai judge: is_threat=%v compliance_violated=%v summary=%s",
+				alert.AIJudge.IsThreat, alert.AIJudge.ComplianceViolated, alert.AIJudge.SummaryJa)
 		}
 		if mqttExp != nil {
 			_ = mqttExp.PublishAlert(alert)
@@ -611,13 +618,13 @@ func runFIMCollector(ctx context.Context, bus *pipeline.Bus, cfg config.FIMColle
 
 // runLogTailerAndAudit starts tailing OS security logs, runs Sigma Tier-1 matching,
 // evaluates candidate alerts with Tier-2 local LLM (AI Judge), and publishes enriched alerts.
-func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, sigmaEngine *sigma.Engine, judge *aijudge.Judge) {
+func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, cfg config.LogsCollectorConfig, sigmaEngine *sigma.Engine, judge *aijudge.Judge) {
 	if sigmaEngine == nil {
 		log.Println("[audit] sigma engine is not active, skipping log tailing")
 		return
 	}
 
-	tailer := logtail.New(nil) // nil = use OS defaults
+	tailer := logtail.New(cfg.Paths) // nil/empty = use OS defaults
 	tailer.Start()
 	defer tailer.Stop()
 
