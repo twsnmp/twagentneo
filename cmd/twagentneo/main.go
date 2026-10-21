@@ -409,6 +409,13 @@ func dispatchEvent(
 			}
 		}
 
+	case pipeline.EventTypeARP:
+		if mqttExp != nil {
+			if err := mqttExp.PublishARP(ev.Payload); err != nil {
+				log.Printf("[dispatch] mqtt arp error: %v", err)
+			}
+		}
+
 	case pipeline.EventTypeFIM:
 		fimEv, ok := ev.Payload.(*audit.FIMEvent)
 		if !ok {
@@ -468,6 +475,21 @@ func dispatchEvent(
 func runResourceCollector(ctx context.Context, bus *pipeline.Bus, cfg config.ResourceCollectorConfig) {
 	collector := resource.New()
 	var prev *resource.Metrics
+
+	collect := func() {
+		m, err := collector.Collect(prev)
+		if err != nil {
+			log.Printf("[resource] collect error: %v", err)
+			return
+		}
+		prev = m
+		bus.PublishMetrics(m)
+		checkResourceThresholds(m, cfg, bus)
+	}
+
+	// Immediate collection on startup
+	collect()
+
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
 
@@ -476,14 +498,7 @@ func runResourceCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Res
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			m, err := collector.Collect(prev)
-			if err != nil {
-				log.Printf("[resource] collect error: %v", err)
-				continue
-			}
-			prev = m
-			bus.PublishMetrics(m)
-			checkResourceThresholds(m, cfg, bus)
+			collect()
 		}
 	}
 }
@@ -540,6 +555,21 @@ func checkResourceThresholds(m *resource.Metrics, cfg config.ResourceCollectorCo
 
 // runNetworkCollector periodically collects network and ARP state.
 func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.NetworkCollectorConfig) {
+	collect := func() {
+		snap, err := network.Collect(cfg.ARPWatch)
+		if err != nil {
+			log.Printf("[network] collect error: %v", err)
+			return
+		}
+		bus.PublishNetwork(snap)
+		if cfg.ARPWatch && snap.ARP != nil {
+			bus.PublishARP(snap.ARP)
+		}
+	}
+
+	// Immediate collection on startup
+	collect()
+
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
 
@@ -548,12 +578,7 @@ func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Netw
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			snap, err := network.Collect()
-			if err != nil {
-				log.Printf("[network] collect error: %v", err)
-				continue
-			}
-			bus.PublishNetwork(snap)
+			collect()
 		}
 	}
 }

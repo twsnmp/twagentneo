@@ -198,7 +198,8 @@ iso(1).org(3).dod(6).internet(1).private(4).enterprises(1).twise(17862)
 - Pure Go MQTTライブラリ使用。
 - トピック設計:
   - メトリクス: `twsnmpneo/agent/{agent_id}/metrics`
-  - ARP/ネットワーク: `twsnmpneo/agent/{agent_id}/network`
+  - ネットワーク: `twsnmpneo/agent/{agent_id}/network`
+  - ARP監視: `twsnmpneo/agent/{agent_id}/arp`
   - セキュリティアラート: `twsnmpneo/agent/{agent_id}/alert`
   - 死活ステータス (LWT): `twsnmpneo/agent/{agent_id}/status`
 - セキュリティアラートのPayloadには `ai_judge` フィールドが完全な形で埋め込まれる。

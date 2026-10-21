@@ -13,7 +13,8 @@ type EventType int
 
 const (
 	EventTypeMetrics       EventType = iota // host resource metrics
-	EventTypeNetwork                        // ARP / network state
+	EventTypeNetwork                        // network interface state
+	EventTypeARP                            // ARP / neighbor cache state
 	EventTypeAlert                          // security alert (Sigma + AI judge)
 	EventTypeFIM                            // file integrity event
 	EventTypeHeartbeat                      // periodic heartbeat
@@ -118,9 +119,14 @@ func (b *Bus) PublishMetrics(payload interface{}) {
 	b.Publish(&Event{Type: EventTypeMetrics, Timestamp: time.Now(), Payload: payload})
 }
 
-// PublishNetwork is a convenience helper for network/ARP events.
+// PublishNetwork is a convenience helper for network events.
 func (b *Bus) PublishNetwork(payload interface{}) {
 	b.Publish(&Event{Type: EventTypeNetwork, Timestamp: time.Now(), Payload: payload})
+}
+
+// PublishARP is a convenience helper for ARP table events.
+func (b *Bus) PublishARP(payload interface{}) {
+	b.Publish(&Event{Type: EventTypeARP, Timestamp: time.Now(), Payload: payload})
 }
 
 // PublishAlert is a convenience helper for security alert events.

@@ -101,9 +101,14 @@ func (e *MQTTExporter) PublishMetrics(payload interface{}) error {
 	return e.publish(e.topic("metrics"), 0, false, payload)
 }
 
-// PublishNetwork sends network/ARP snapshot data.
+// PublishNetwork sends network snapshot data.
 func (e *MQTTExporter) PublishNetwork(payload interface{}) error {
 	return e.publish(e.topic("network"), 0, false, payload)
+}
+
+// PublishARP sends ARP watch table data.
+func (e *MQTTExporter) PublishARP(payload interface{}) error {
+	return e.publish(e.topic("arp"), 0, false, payload)
 }
 
 // PublishAlert sends a security alert (Sigma + optional AI judge).

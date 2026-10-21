@@ -201,7 +201,8 @@ All exporters are built using Pure Go packages with zero CGO dependencies.
 - Pure Go MQTT client (`paho.mqtt.golang`).
 - Topic Hierarchy:
   - Metrics: `twsnmpneo/agent/{agent_id}/metrics`
-  - Network/ARP: `twsnmpneo/agent/{agent_id}/network`
+  - Network: `twsnmpneo/agent/{agent_id}/network`
+  - ARP Watch: `twsnmpneo/agent/{agent_id}/arp`
   - Security Alerts: `twsnmpneo/agent/{agent_id}/alert`
   - Health/LWT: `twsnmpneo/agent/{agent_id}/status`
 - Alert payloads include the complete structured `ai_judge` field.

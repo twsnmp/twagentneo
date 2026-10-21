@@ -81,7 +81,8 @@ func GetARP() ([]ARPEntry, error) {
 }
 
 // Collect assembles a complete network Snapshot.
-func Collect() (*Snapshot, error) {
+// An optional arpWatch bool flag can be passed to enable or disable ARP collection (defaults to true).
+func Collect(arpWatch ...bool) (*Snapshot, error) {
 	s := &Snapshot{Timestamp: time.Now()}
 
 	ifaces, err := GetInterfaces()
@@ -90,9 +91,16 @@ func Collect() (*Snapshot, error) {
 	}
 	s.Interfaces = ifaces
 
-	arp, err := GetARP()
-	if err == nil {
-		s.ARP = arp
+	enableARP := true
+	if len(arpWatch) > 0 {
+		enableARP = arpWatch[0]
+	}
+
+	if enableARP {
+		arp, err := GetARP()
+		if err == nil {
+			s.ARP = arp
+		}
 	}
 	// ARP collection errors are non-fatal.
 
