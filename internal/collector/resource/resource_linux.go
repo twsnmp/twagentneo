@@ -3,6 +3,7 @@
 package resource
 
 import (
+	"context"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -18,6 +19,19 @@ type linuxCollector struct{}
 // New returns the platform-specific Collector implementation.
 func New() Collector {
 	return &linuxCollector{}
+}
+
+// isVirtualOrNetworkFs returns true for filesystems that are virtual/pseudo or network-based
+// to avoid hanging statfs calls and meaningless entries on Linux.
+func isVirtualOrNetworkFs(fstype string) bool {
+	switch fstype {
+	case "devfs", "autofs", "proc", "sysfs", "devpts", "cgroup", "cgroup2",
+		"pstore", "bpf", "tracefs", "hugetlbfs", "mqueue", "debugfs",
+		"securityfs", "fusectl", "configfs", "overlay", "squashfs", "tmpfs",
+		"nfs", "nfs4", "cifs", "smbfs":
+		return true
+	}
+	return false
 }
 
 func (c *linuxCollector) Collect(prev *Metrics) (*Metrics, error) {
@@ -51,10 +65,17 @@ func (c *linuxCollector) Collect(prev *Metrics) (*Metrics, error) {
 	}
 
 	// --- Disk ---
-	parts, err := disk.Partitions(false)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	parts, err := disk.PartitionsWithContext(ctx, false)
+	cancel()
 	if err == nil {
 		for _, p := range parts {
-			usage, err := disk.Usage(p.Mountpoint)
+			if isVirtualOrNetworkFs(p.Fstype) {
+				continue
+			}
+			uctx, ucancel := context.WithTimeout(context.Background(), 2*time.Second)
+			usage, err := disk.UsageWithContext(uctx, p.Mountpoint)
+			ucancel()
 			if err != nil {
 				continue
 			}

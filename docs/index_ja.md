@@ -265,13 +265,12 @@ Sigma ルールで検知された候補イベントに対し、組み込み LLM 
 MQTT エクスポーターは、TWSNMP NEO のイベントパイプラインに最適化されたトピック構成で送信します：
 
 ```text
-{topic_prefix}/{agent_id}/resource    # CPU, メモリ, ディスクメトリクス
-{topic_prefix}/{agent_id}/network     # ネットワークインターフェース状態
+{topic_prefix}/{agent_id}/metrics     # CPU, メモリ, ディスクメトリクス [エイリアス: resource]
+{topic_prefix}/{agent_id}/interface   # ネットワークインターフェース状態 [エイリアス: network]
 {topic_prefix}/{agent_id}/arp         # ARP テーブル一覧
 {topic_prefix}/{agent_id}/tcp         # アクティブ TCP 接続宛先リスト
-{topic_prefix}/{agent_id}/fim         # ファイル整合性イベント
-{topic_prefix}/{agent_id}/alert       # Sigma + AI Judge による高度セキュリティアラート
-{topic_prefix}/{agent_id}/heartbeat   # 定期ハートビート信号（5分間隔）
+{topic_prefix}/{agent_id}/alert       # Sigma + AI Judge セキュリティアラート [エイリアス: fim]
+{topic_prefix}/{agent_id}/status      # エージェント死活・ステータス (LWT) [エイリアス: heartbeat]
 ```
 
 ### 7.2 Syslog (RFC 5424 / RFC 3164)

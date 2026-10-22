@@ -97,12 +97,16 @@ func (e *MQTTExporter) publish(topic string, qos byte, retained bool, v interfac
 }
 
 // PublishMetrics sends host resource metrics.
+// Publishes to "metrics" (SPEC.md) and mirrors to "resource" (documentation alias).
 func (e *MQTTExporter) PublishMetrics(payload interface{}) error {
+	_ = e.publish(e.topic("resource"), 0, false, payload)
 	return e.publish(e.topic("metrics"), 0, false, payload)
 }
 
 // PublishInterface sends network interface configuration and counters.
+// Publishes to "interface" (SPEC.md) and mirrors to "network" (documentation alias).
 func (e *MQTTExporter) PublishInterface(payload interface{}) error {
+	_ = e.publish(e.topic("network"), 0, false, payload)
 	return e.publish(e.topic("interface"), 0, false, payload)
 }
 
@@ -122,7 +126,9 @@ func (e *MQTTExporter) PublishAlert(alert *audit.SecurityAlert) error {
 }
 
 // PublishFIM sends a file integrity monitoring event.
+// Publishes to "alert" (SPEC.md) and mirrors to "fim" (documentation alias).
 func (e *MQTTExporter) PublishFIM(ev *audit.FIMEvent) error {
+	_ = e.publish(e.topic("fim"), 1, false, ev)
 	return e.publish(e.topic("alert"), 1, false, ev)
 }
 
@@ -132,7 +138,13 @@ func (e *MQTTExporter) PublishResourceAlert(ra *audit.ResourceAlert) error {
 }
 
 // PublishHeartbeat sends a periodic keep-alive status.
+// Publishes to "status" (SPEC.md) and mirrors to "heartbeat" (documentation alias).
 func (e *MQTTExporter) PublishHeartbeat() error {
+	_ = e.publish(e.topic("heartbeat"), 1, false, heartbeatPayload{
+		AgentID:   e.agentID,
+		Status:    "online",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	})
 	return e.publishStatus("online")
 }
 

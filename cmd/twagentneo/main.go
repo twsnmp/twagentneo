@@ -308,10 +308,14 @@ func main() {
 	}
 
 	// --- Event Dispatch Loop ---
+	// Subscribe before starting collectors so that immediate startup collections are never dropped.
+	sub := bus.Subscribe()
+	defer sub.Close()
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		runDispatch(ctx, bus, mqttExp, syslogExp, trapExp)
+		runDispatch(ctx, sub, mqttExp, syslogExp, trapExp)
 	}()
 
 	// --- Resource Collector ---
@@ -364,17 +368,14 @@ func main() {
 	log.Println("twagentneo stopped cleanly.")
 }
 
-// runDispatch reads events from the bus and routes them to exporters.
+// runDispatch reads events from the bus subscription and routes them to exporters.
 func runDispatch(
 	ctx context.Context,
-	bus *pipeline.Bus,
+	sub *pipeline.Sub,
 	mqttExp *exporter.MQTTExporter,
 	syslogExp *exporter.SyslogExporter,
 	trapExp *exporter.SNMPTrapExporter,
 ) {
-	sub := bus.Subscribe()
-	defer sub.Close()
-
 	for {
 		select {
 		case <-ctx.Done():

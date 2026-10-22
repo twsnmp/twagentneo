@@ -8,13 +8,22 @@ import (
 )
 
 // defaultSources returns Linux security log paths to tail.
+// Different Linux distributions use different security log paths
+// (e.g. Debian/Ubuntu uses /var/log/auth.log, RHEL/CentOS uses /var/log/secure).
+// Only files that actually exist are watched to prevent error spamming.
 func defaultSources() []string {
-	// Try common paths; missing files are handled gracefully by the tailer.
-	return []string{
-		"/var/log/auth.log",  // Debian/Ubuntu
-		"/var/log/secure",    // RHEL/CentOS
-		"/var/log/syslog",
+	candidates := []string{
+		"/var/log/auth.log", // Debian/Ubuntu
+		"/var/log/secure",   // RHEL/CentOS
+		"/var/log/syslog",   // Generic syslog
 	}
+	var sources []string
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			sources = append(sources, p)
+		}
+	}
+	return sources
 }
 
 // inode returns the inode number of the open file.

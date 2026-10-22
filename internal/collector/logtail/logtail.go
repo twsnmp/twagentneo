@@ -71,11 +71,13 @@ func (t *Tailer) tailFile(path string) {
 	var prevInode uint64
 	var offset int64
 
-	openFile := func() bool {
+	openFile := func(verbose bool) bool {
 		var err error
 		f, err = os.Open(path)
 		if err != nil {
-			log.Printf("[logtail] cannot open %s: %v", path, err)
+			if verbose {
+				log.Printf("[logtail] cannot open %s: %v", path, err)
+			}
 			return false
 		}
 		// Seek to end on first open to avoid replaying old entries.
@@ -85,7 +87,7 @@ func (t *Tailer) tailFile(path string) {
 		return true
 	}
 
-	if !openFile() {
+	if !openFile(true) {
 		// File not yet available. Log once, then retry silently.
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -96,7 +98,7 @@ func (t *Tailer) tailFile(path string) {
 				return
 			case <-ticker.C:
 				retries++
-				if openFile() {
+				if openFile(false) {
 					goto tail
 				}
 				// Log every 12 retries (~1 min) to show we are still waiting,
@@ -127,7 +129,7 @@ tail:
 			// Check for rotation
 			if rotated(path, prevInode) {
 				f.Close()
-				if !openFile() {
+				if !openFile(false) {
 					continue
 				}
 				reader = bufio.NewReader(f)

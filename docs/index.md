@@ -265,13 +265,12 @@ When a Tier-1 rule triggers, candidate events are dispatched to the local `tensa
 Telemetry is streamed across dedicated MQTT topics tailored for TWSNMP NEO's ingestion engine:
 
 ```text
-{topic_prefix}/{agent_id}/resource    # CPU, Memory, Disk metrics
-{topic_prefix}/{agent_id}/network     # Network interface status
+{topic_prefix}/{agent_id}/metrics     # Host resource metrics (CPU, Memory, Disk) [alias: resource]
+{topic_prefix}/{agent_id}/interface   # Network interface status [alias: network]
 {topic_prefix}/{agent_id}/arp         # ARP table snapshots
 {topic_prefix}/{agent_id}/tcp         # Active TCP connection destinations
-{topic_prefix}/{agent_id}/fim         # File integrity events
-{topic_prefix}/{agent_id}/alert       # Enriched Sigma + AI Judge security alerts
-{topic_prefix}/{agent_id}/heartbeat   # Agent heartbeat pulse (5-minute interval)
+{topic_prefix}/{agent_id}/alert       # Enriched Sigma + AI Judge security alerts [alias: fim]
+{topic_prefix}/{agent_id}/status      # Agent status / heartbeat / LWT [alias: heartbeat]
 ```
 
 ### 7.2 Syslog (RFC 5424 / RFC 3164)
