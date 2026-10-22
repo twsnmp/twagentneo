@@ -226,6 +226,26 @@ func Stop() error {
 	return nil
 }
 
+// Restart restarts the systemd service.
+func Restart() error {
+	if err := checkSystemd(); err != nil {
+		return err
+	}
+	if err := checkRoot(); err != nil {
+		return err
+	}
+
+	unitPath := filepath.Join(systemdUnitDir, ServiceName+".service")
+	if _, err := os.Stat(unitPath); os.IsNotExist(err) {
+		return fmt.Errorf("service %q is not installed", ServiceName)
+	}
+
+	if _, err := runCmd("systemctl", "restart", ServiceName+".service"); err != nil {
+		return fmt.Errorf("failed to restart service: %w", err)
+	}
+	return nil
+}
+
 // Status queries the status of the systemd service.
 func Status() (string, error) {
 	if err := checkSystemd(); err != nil {

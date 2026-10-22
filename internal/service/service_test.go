@@ -30,6 +30,10 @@ func TestServiceUnsupported(t *testing.T) {
 		t.Errorf("expected Stop() to return error on %s", runtime.GOOS)
 	}
 
+	if err := Restart(); err == nil {
+		t.Errorf("expected Restart() to return error on %s", runtime.GOOS)
+	}
+
 	if _, err := Status(); err == nil {
 		t.Errorf("expected Status() to return error on %s", runtime.GOOS)
 	}

@@ -33,6 +33,11 @@ func Stop() error {
 	return errNotSupported
 }
 
+// Restart returns an error on non-Windows platforms.
+func Restart() error {
+	return errNotSupported
+}
+
 // Status returns an error on non-Windows platforms.
 func Status() (string, error) {
 	return "", errNotSupported

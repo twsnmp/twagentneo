@@ -101,6 +101,9 @@ Run in an elevated Administrator PowerShell or Command Prompt:
 # Start service
 .\twagentneo.exe service start
 
+# Restart service
+.\twagentneo.exe service restart
+
 # Query status
 .\twagentneo.exe service status
 
@@ -121,8 +124,17 @@ sudo /usr/local/bin/twagentneo service install -auto -config /etc/twagentneo/con
 # Start service
 sudo /usr/local/bin/twagentneo service start
 
+# Restart service
+sudo /usr/local/bin/twagentneo service restart
+
 # Query status
 sudo /usr/local/bin/twagentneo service status
+
+# Stop service
+sudo /usr/local/bin/twagentneo service stop
+
+# Remove service
+sudo /usr/local/bin/twagentneo service remove
 ```
 
 ---

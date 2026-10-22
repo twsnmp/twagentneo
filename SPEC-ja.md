@@ -361,11 +361,12 @@ exporters:
   - `twagentneo update -check` (または `-check-update`): 更新確認のみ実施。
   - `twagentneo update -yes`: 確認プロンプトをスキップして即時更新。
   - `twagentneo update -version <tag>`: 指定したバージョンへ更新/ロールバック。
-  - `twagentneo service <install|remove|start|stop|status>` / `-service <action>`: Windowsサービス (SCM) または Linuxサービス (systemd) の管理。
+  - `twagentneo service <install|remove|start|stop|restart|status>` / `-service <action>`: Windowsサービス (SCM) または Linuxサービス (systemd) の管理。
     - `-auto` / `-service-auto`: インストール時にOS起動時の自動開始を設定。
     - `-delayed` / `-service-delayed`: Windowsサービスインストール時に自動開始 (遅延開始) を設定。
     - `service install` 時に渡された設定パス（`-config` など）は絶対パスに解決されて登録。
     - Windows SCMから起動された場合、カレントディレクトリを実行ファイル配置ディレクトリに自動調整し、相対パス設定ファイルもスムーズに読み込み。
+    - Linuxでは systemd ユニットファイル `/etc/systemd/system/twagentneo.service` を自動生成（`Type=simple`, `Restart=always`, `RestartSec=5s`, `LimitNOFILE=65536`, `KillMode=process`, `TimeoutStopSec=30s`）。root権限（sudo）での実行が必要。
 - **環境に配慮した更新ガード (`internal/updater`)**:
   - **Homebrew環境**: 自動検知し、`brew upgrade twagentneo` の実行を案内。
   - **コンテナ環境**: コンテナ内更新を抑止し、イメージの再取得を案内。

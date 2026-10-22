@@ -335,4 +335,11 @@ confirm "Install twagentneo ${GREEN}${VERSION}${NO_COLOR} to ${BOLD}${GREEN}${BI
 check_bin_dir "${BIN_DIR}"
 install "${EXT}"
 completed "twagentneo ${VERSION} installed successfully to ${BIN_DIR}/twagentneo"
+
+if [ "${PLATFORM}" = "linux" ]; then
+  printf "\n${BOLD}To register and start twagentneo as a systemd service (auto-start on boot):${NO_COLOR}\n"
+  printf "  sudo %s service install -auto -config /etc/twagentneo/twagentneo.yaml\n" "${BIN_DIR}/twagentneo"
+  printf "  sudo %s service start\n" "${BIN_DIR}/twagentneo"
+fi
+
 printf "\nRun 'twagentneo -h' to get started.\n\n"

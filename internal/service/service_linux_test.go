@@ -144,6 +144,9 @@ func TestLinuxServiceLifecycleMocked(t *testing.T) {
 		if err := Start(); err != nil {
 			t.Errorf("Start() error: %v", err)
 		}
+		if err := Restart(); err != nil {
+			t.Errorf("Restart() error: %v", err)
+		}
 		if err := Stop(); err != nil {
 			t.Errorf("Stop() error: %v", err)
 		}

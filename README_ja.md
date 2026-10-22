@@ -101,6 +101,9 @@ TWSNMP NEO (`twsnmpneo`) と同様に、バックグラウンドサービスと�
 # サービスの開始
 .\twagentneo.exe service start
 
+# サービスの再起動
+.\twagentneo.exe service restart
+
 # 状態確認
 .\twagentneo.exe service status
 
@@ -121,8 +124,17 @@ sudo /usr/local/bin/twagentneo service install -auto -config /etc/twagentneo/con
 # サービスの開始
 sudo /usr/local/bin/twagentneo service start
 
+# サービスの再起動
+sudo /usr/local/bin/twagentneo service restart
+
 # 状態確認
 sudo /usr/local/bin/twagentneo service status
+
+# サービスの停止
+sudo /usr/local/bin/twagentneo service stop
+
+# サービスの削除
+sudo /usr/local/bin/twagentneo service remove
 ```
 
 ---

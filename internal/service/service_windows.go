@@ -211,6 +211,12 @@ func Stop() error {
 	return nil
 }
 
+// Restart restarts the Windows service by stopping and then starting it.
+func Restart() error {
+	_ = Stop()
+	return Start()
+}
+
 // Status returns human-readable status of the service.
 func Status() (string, error) {
 	m, err := mgr.Connect()

@@ -260,6 +260,14 @@ func handleServiceCommand(action string, remainingArgs []string) {
 		fmt.Printf("Service %q stopped successfully.\n", service.ServiceName)
 		os.Exit(0)
 
+	case "restart":
+		if err := service.Restart(); err != nil {
+			fmt.Printf("Failed to restart service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Service %q restarted successfully.\n", service.ServiceName)
+		os.Exit(0)
+
 	case "status":
 		st, err := service.Status()
 		if err != nil {
@@ -270,7 +278,7 @@ func handleServiceCommand(action string, remainingArgs []string) {
 		os.Exit(0)
 
 	default:
-		fmt.Printf("Unknown service command %q. Available commands: install, remove, start, stop, status\n", action)
+		fmt.Printf("Unknown service command %q. Available commands: install, remove, start, stop, restart, status\n", action)
 		os.Exit(1)
 	}
 }
@@ -315,7 +323,7 @@ func main() {
 			os.Exit(0)
 		case "service":
 			if len(os.Args) < 3 {
-				fmt.Println("Usage: twagentneo service <install|remove|start|stop|status> [options]")
+				fmt.Println("Usage: twagentneo service <install|remove|start|stop|restart|status> [options]")
 				os.Exit(1)
 			}
 			action := os.Args[2]
