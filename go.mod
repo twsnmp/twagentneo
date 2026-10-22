@@ -7,11 +7,13 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/elastic/go-grok v0.3.1
 	github.com/fsnotify/fsnotify v1.8.0
-	github.com/gosnmp/gosnmp v1.38.0
-	github.com/mattn/tensai v0.0.28
+	github.com/gosnmp/gosnmp v1.45.0
+	github.com/mattn/tensai v0.0.35
 	github.com/shirou/gopsutil/v4 v4.25.4
 	github.com/spf13/viper v1.20.1
-	golang.org/x/sys v0.33.0
+	golang.org/x/mod v0.41.0
+	golang.org/x/net v0.61.0
+	golang.org/x/sys v0.49.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -22,7 +24,7 @@ require (
 	github.com/alecthomas/participle v0.7.1 // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magefile/mage v1.15.0 // indirect
@@ -39,8 +41,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
