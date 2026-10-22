@@ -63,7 +63,11 @@ make build
 ### エージェントの起動
 
 ```bash
+# 通常起動
 twagentneo -config config.yaml
+
+# デバッグログをコンソールに出力して起動 (-debug または -d)
+twagentneo -config config.yaml -debug
 ```
 
 ### バージョン確認

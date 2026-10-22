@@ -37,7 +37,15 @@ var (
 	version = "v0.1.0"
 	commit  = ""
 	date    = "unknown"
+
+	debugEnabled bool
 )
+
+func debugLog(format string, v ...any) {
+	if debugEnabled {
+		log.Printf("[debug] "+format, v...)
+	}
+}
 
 func init() {
 	if version != "" && !strings.HasPrefix(version, "v") && version != "dev" && version != "unknown" {
@@ -205,6 +213,9 @@ func main() {
 
 	// --- CLI Flags ---
 	configPath := flag.String("config", "twagentneo.yaml", "path to configuration file")
+	var debugFlag bool
+	flag.BoolVar(&debugFlag, "debug", false, "enable debug logging to console")
+	flag.BoolVar(&debugFlag, "d", false, "enable debug logging to console (shorthand)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	updateFlag := flag.Bool("update", false, "Update twagentneo to the latest release")
 	checkUpdateFlag := flag.Bool("check-update", false, "Check for available twagentneo updates")
@@ -232,7 +243,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("config load: %v", err)
 	}
+	if debugFlag || strings.EqualFold(cfg.Agent.LogLevel, "debug") {
+		debugEnabled = true
+		log.Println("[debug] debug logging enabled")
+	}
 	log.Printf("agent id=%s name=%s", cfg.Agent.ID, cfg.Agent.Name)
+	debugLog("configuration loaded from %s", *configPath)
 
 	// --- Context for graceful shutdown ---
 	ctx, cancel := context.WithCancel(context.Background())
@@ -320,6 +336,7 @@ func main() {
 
 	// --- Resource Collector ---
 	if cfg.Collectors.Resource.Enabled {
+		debugLog("starting resource collector (interval: %v)", cfg.Collectors.Resource.Interval)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -329,6 +346,8 @@ func main() {
 
 	// --- Network / ARP Collector ---
 	if cfg.Collectors.Network.Enabled {
+		debugLog("starting network collector (interval: %v, arp: %v, tcp: %v)",
+			cfg.Collectors.Network.Interval, cfg.Collectors.Network.ARPWatch, cfg.Collectors.Network.TCPWatch)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -338,6 +357,7 @@ func main() {
 
 	// --- FIM Collector ---
 	if cfg.Collectors.FIM.Enabled {
+		debugLog("starting FIM collector (paths: %v)", cfg.Collectors.FIM.Paths)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -347,6 +367,7 @@ func main() {
 
 	// --- Log Tailer & Audit Pipeline ---
 	if cfg.Collectors.Logs.Enabled {
+		debugLog("starting log tailer & audit pipeline")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -395,11 +416,14 @@ func dispatchEvent(
 	syslogExp *exporter.SyslogExporter,
 	trapExp *exporter.SNMPTrapExporter,
 ) {
+	debugLog("[dispatch] routing event: type=%s", ev.Type)
 	switch ev.Type {
 	case pipeline.EventTypeMetrics:
 		if mqttExp != nil {
 			if err := mqttExp.PublishMetrics(ev.Payload); err != nil {
 				log.Printf("[dispatch] mqtt metrics error: %v", err)
+			} else {
+				debugLog("[dispatch] mqtt metrics published")
 			}
 		}
 
@@ -407,6 +431,8 @@ func dispatchEvent(
 		if mqttExp != nil {
 			if err := mqttExp.PublishInterface(ev.Payload); err != nil {
 				log.Printf("[dispatch] mqtt interface error: %v", err)
+			} else {
+				debugLog("[dispatch] mqtt interface published")
 			}
 		}
 
@@ -414,6 +440,8 @@ func dispatchEvent(
 		if mqttExp != nil {
 			if err := mqttExp.PublishARP(ev.Payload); err != nil {
 				log.Printf("[dispatch] mqtt arp error: %v", err)
+			} else {
+				debugLog("[dispatch] mqtt arp published")
 			}
 		}
 
@@ -421,6 +449,8 @@ func dispatchEvent(
 		if mqttExp != nil {
 			if err := mqttExp.PublishTCP(ev.Payload); err != nil {
 				log.Printf("[dispatch] mqtt tcp error: %v", err)
+			} else {
+				debugLog("[dispatch] mqtt tcp published")
 			}
 		}
 
@@ -432,12 +462,15 @@ func dispatchEvent(
 		log.Printf("[fim] alert: op=%s path=%s hash=%s", fimEv.Op, fimEv.Path, fimEv.Hash)
 		if mqttExp != nil {
 			_ = mqttExp.PublishFIM(fimEv)
+			debugLog("[dispatch] mqtt fim alert published")
 		}
 		if syslogExp != nil {
 			_ = syslogExp.SendFIM(fimEv)
+			debugLog("[dispatch] syslog fim alert sent")
 		}
 		if trapExp != nil {
 			_ = trapExp.SendFIMAlert(fimEv)
+			debugLog("[dispatch] snmptrap fim alert sent")
 		}
 
 	case pipeline.EventTypeAlert:
@@ -453,12 +486,15 @@ func dispatchEvent(
 		}
 		if mqttExp != nil {
 			_ = mqttExp.PublishAlert(alert)
+			debugLog("[dispatch] mqtt alert published")
 		}
 		if syslogExp != nil {
 			_ = syslogExp.SendAlert(alert)
+			debugLog("[dispatch] syslog alert sent")
 		}
 		if trapExp != nil {
 			_ = trapExp.SendSecurityAlert(alert)
+			debugLog("[dispatch] snmptrap alert sent")
 		}
 
 	case pipeline.EventTypeResourceAlert:
@@ -466,22 +502,29 @@ func dispatchEvent(
 		if !ok {
 			return
 		}
+		log.Printf("[alert] resource alert: resource=%s threshold=%.1f value=%.1f mount=%s",
+			ra.Resource, ra.Threshold, ra.Value, ra.MountPath)
 		if mqttExp != nil {
 			_ = mqttExp.PublishResourceAlert(ra)
+			debugLog("[dispatch] mqtt resource alert published")
 		}
 		if syslogExp != nil {
 			_ = syslogExp.SendResourceAlert(ra)
+			debugLog("[dispatch] syslog resource alert sent")
 		}
 		if trapExp != nil {
 			_ = trapExp.SendResourceAlert(ra)
+			debugLog("[dispatch] snmptrap resource alert sent")
 		}
 
 	case pipeline.EventTypeHeartbeat:
 		if trapExp != nil {
 			_ = trapExp.SendHeartbeat()
+			debugLog("[dispatch] snmptrap heartbeat sent")
 		}
 		if mqttExp != nil {
 			_ = mqttExp.PublishHeartbeat()
+			debugLog("[dispatch] mqtt heartbeat published")
 		}
 	}
 }
@@ -497,6 +540,8 @@ func runResourceCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Res
 			log.Printf("[resource] collect error: %v", err)
 			return
 		}
+		debugLog("[resource] collect: cpu=%.1f%% mem=%.1f%% load1=%.2f disks=%d ifaces=%d",
+			m.CPUPercent, m.MemPercent, m.LoadAvg1, len(m.Disks), len(m.Interfaces))
 		prev = m
 		bus.PublishMetrics(m)
 		checkResourceThresholds(m, cfg, bus)
@@ -576,6 +621,7 @@ func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Netw
 		if err != nil {
 			log.Printf("[network] get interfaces error: %v", err)
 		} else {
+			debugLog("[network] interfaces collected: count=%d", len(ifaces))
 			bus.PublishInterface(ifaces)
 		}
 
@@ -585,6 +631,7 @@ func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Netw
 			if err != nil {
 				log.Printf("[network] get arp error: %v", err)
 			} else {
+				debugLog("[network] arp entries collected: count=%d", len(arp))
 				bus.PublishARP(arp)
 			}
 		}
@@ -595,6 +642,7 @@ func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Netw
 			if err != nil {
 				log.Printf("[network] get tcp connections error: %v", err)
 			} else {
+				debugLog("[network] tcp connections collected: count=%d", len(tcpConns))
 				bus.PublishTCP(tcpConns)
 			}
 		}
@@ -628,6 +676,7 @@ func runFIMCollector(ctx context.Context, bus *pipeline.Bus, cfg config.FIMColle
 		return
 	}
 	defer watcher.Stop()
+	debugLog("[fim] watcher started for %d paths", len(cfg.Paths))
 
 	for {
 		select {
@@ -637,6 +686,7 @@ func runFIMCollector(ctx context.Context, bus *pipeline.Bus, cfg config.FIMColle
 			if !ok {
 				return
 			}
+			debugLog("[fim] event received: op=%s path=%s", ev.Op, ev.Path)
 			bus.PublishFIM(ev)
 		}
 	}
@@ -653,6 +703,7 @@ func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, cfg config.Log
 	tailer := logtail.New(cfg.Paths) // nil/empty = use OS defaults
 	tailer.Start()
 	defer tailer.Stop()
+	debugLog("[audit] starting log tailer for paths: %v", cfg.Paths)
 
 	// Sliding window for recent log context lines (up to 20 lines)
 	const maxContextLogs = 20
@@ -697,6 +748,7 @@ func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, cfg config.Log
 			if !ok {
 				return
 			}
+			debugLog("[audit] scanned log line (source=%s): %s", ev.Source, ev.Line)
 
 			// Update context history
 			if len(contextHistory) >= maxContextLogs {
@@ -731,6 +783,7 @@ func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, cfg config.Log
 					SourceLog:   ev.Source,
 					MatchedData: matchedData,
 				}
+				debugLog("[audit] sigma match: rule=%s title=%q level=%s", rule.ID, rule.Title, rule.Level)
 
 				// Context snapshot for AI Judge
 				ctxCopy := make([]string, len(contextHistory))
@@ -739,6 +792,7 @@ func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, cfg config.Log
 				// Queue for Tier-2 AI Judge, or fallback to immediate publish if queue is full
 				select {
 				case judgeQueue <- judgeTask{alert: alert, contextLogs: ctxCopy}:
+					debugLog("[audit] queued alert for AI judge: rule=%s", alert.RuleID)
 				default:
 					log.Printf("[audit] judge queue full, emitting rule %s without AI judge", alert.RuleID)
 					bus.PublishAlert(alert)
@@ -759,6 +813,7 @@ func runHeartbeat(ctx context.Context, bus *pipeline.Bus, agentID string) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			debugLog("[heartbeat] periodic heartbeat triggered")
 			bus.Publish(&pipeline.Event{
 				Type:      pipeline.EventTypeHeartbeat,
 				Timestamp: time.Now(),

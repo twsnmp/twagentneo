@@ -82,3 +82,27 @@ func TestBusUnsubscribe(t *testing.T) {
 		t.Fatal("channel was not closed")
 	}
 }
+
+func TestEventTypeString(t *testing.T) {
+	tests := []struct {
+		ev   EventType
+		want string
+	}{
+		{EventTypeMetrics, "Metrics"},
+		{EventTypeInterface, "Interface"},
+		{EventTypeARP, "ARP"},
+		{EventTypeTCP, "TCP"},
+		{EventTypeAlert, "Alert"},
+		{EventTypeFIM, "FIM"},
+		{EventTypeHeartbeat, "Heartbeat"},
+		{EventTypeRawLog, "RawLog"},
+		{EventTypeResourceAlert, "ResourceAlert"},
+		{EventType(999), "Unknown"},
+	}
+
+	for _, tt := range tests {
+		if got := tt.ev.String(); got != tt.want {
+			t.Errorf("EventType(%d).String() = %q, want %q", tt.ev, got, tt.want)
+		}
+	}
+}

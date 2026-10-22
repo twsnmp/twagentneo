@@ -78,8 +78,8 @@ touch test.log
 # ビルド
 go build -o twagentneo ./cmd/twagentneo
 
-# 起動
-./twagentneo -config ./config.yaml
+# 起動 (動作確認のために詳細な収集・送信ログをコンソールに出力する場合は -debug を指定)
+./twagentneo -config ./config.yaml -debug
 ```
 
 起動に成功すると、内蔵 Sigma ルールが OS に合わせて自動ロードされます（macOS の場合は darwin 用ルール 33 件）。

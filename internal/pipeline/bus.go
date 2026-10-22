@@ -23,6 +23,31 @@ const (
 	EventTypeResourceAlert                  // host resource threshold alert
 )
 
+func (t EventType) String() string {
+	switch t {
+	case EventTypeMetrics:
+		return "Metrics"
+	case EventTypeInterface:
+		return "Interface"
+	case EventTypeARP:
+		return "ARP"
+	case EventTypeTCP:
+		return "TCP"
+	case EventTypeAlert:
+		return "Alert"
+	case EventTypeFIM:
+		return "FIM"
+	case EventTypeHeartbeat:
+		return "Heartbeat"
+	case EventTypeRawLog:
+		return "RawLog"
+	case EventTypeResourceAlert:
+		return "ResourceAlert"
+	default:
+		return "Unknown"
+	}
+}
+
 // FIMPayload wraps a file integrity event for the event bus.
 type FIMPayload struct {
 	Event interface{} // *audit.FIMEvent — avoid import cycle; cast at consumer

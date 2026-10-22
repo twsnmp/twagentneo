@@ -63,7 +63,11 @@ make build
 ### Start Agent
 
 ```bash
+# Normal start
 twagentneo -config config.yaml
+
+# Start with console debug logging enabled (-debug or -d)
+twagentneo -config config.yaml -debug
 ```
 
 ### Check Version
