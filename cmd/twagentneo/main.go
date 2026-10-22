@@ -212,6 +212,8 @@ func handleServiceCommand(action string, remainingArgs []string) {
 				autoStart = true
 			} else if arg == "-delayed" || arg == "--delayed" || arg == "-service-delayed" || arg == "--service-delayed" {
 				delayedStart = true
+			} else if strings.EqualFold(arg, "install") || strings.EqualFold(arg, "service") {
+				continue
 			} else {
 				serviceArgs = append(serviceArgs, arg)
 			}
@@ -322,6 +324,9 @@ func main() {
 			remaining := os.Args[3:]
 			handleServiceCommand(action, remaining)
 			return
+		case "install", "remove", "uninstall", "start", "stop", "restart", "status":
+			handleServiceCommand(subcmd, os.Args[2:])
+			return
 		}
 	}
 
@@ -390,8 +395,25 @@ func main() {
 			extraArgs = append(extraArgs, "-delayed")
 		}
 		// Forward any configuration flags passed alongside
-		for _, arg := range os.Args[1:] {
-			if strings.HasPrefix(arg, "-service") || strings.HasPrefix(arg, "--service") {
+		skipNext := false
+		for i := 1; i < len(os.Args); i++ {
+			arg := os.Args[i]
+			if skipNext {
+				skipNext = false
+				continue
+			}
+			if arg == "-service" || arg == "--service" {
+				skipNext = true
+				continue
+			}
+			if strings.HasPrefix(arg, "-service=") || strings.HasPrefix(arg, "--service=") {
+				continue
+			}
+			if arg == "-service-auto" || arg == "--service-auto" ||
+				arg == "-service-delayed" || arg == "--service-delayed" {
+				continue
+			}
+			if strings.EqualFold(arg, *serviceCmd) {
 				continue
 			}
 			extraArgs = append(extraArgs, arg)

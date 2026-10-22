@@ -28,8 +28,13 @@ func IsWindowsService() bool {
 
 // formatServiceArgs formats arguments and converts relative file paths to absolute paths.
 func formatServiceArgs(args []string) []string {
-	serviceArgs := make([]string, len(args))
-	copy(serviceArgs, args)
+	var serviceArgs []string
+	for _, arg := range args {
+		if strings.EqualFold(arg, "install") || strings.EqualFold(arg, "service") {
+			continue
+		}
+		serviceArgs = append(serviceArgs, arg)
+	}
 
 	for i := 0; i < len(serviceArgs); i++ {
 		arg := serviceArgs[i]
