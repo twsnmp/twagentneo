@@ -1,0 +1,5 @@
+title: twagentneo
+description: Pure Go, cross-platform AI security & monitoring agent for TWSNMP NEO
+remote_theme: pages-themes/hacker@v0.2.0
+plugins:
+- jekyll-remote-theme
