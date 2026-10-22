@@ -41,8 +41,19 @@ func New(sources []string) *Tailer {
 	}
 }
 
+// Sources returns a copy of the list of log sources being monitored.
+func (t *Tailer) Sources() []string {
+	sources := make([]string, len(t.sources))
+	copy(sources, t.sources)
+	return sources
+}
+
 // Start begins following all configured sources.
 func (t *Tailer) Start() {
+	if len(t.sources) == 0 {
+		log.Println("[logtail] no log files found to monitor")
+		return
+	}
 	for _, src := range t.sources {
 		t.wg.Add(1)
 		go t.tailSource(src)
@@ -66,6 +77,7 @@ func (t *Tailer) Events() <-chan *LogEvent {
 // It reopens the file when it detects a rotation (truncation or new inode).
 func (t *Tailer) tailFile(path string) {
 	defer t.wg.Done()
+	log.Printf("[logtail] watching log file: %s", path)
 
 	var f *os.File
 	var prevInode uint64

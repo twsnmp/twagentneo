@@ -721,7 +721,7 @@ func runLogTailerAndAudit(ctx context.Context, bus *pipeline.Bus, cfg config.Log
 	tailer := logtail.New(cfg.Paths) // nil/empty = use OS defaults
 	tailer.Start()
 	defer tailer.Stop()
-	debugLog("[audit] starting log tailer for paths: %v", cfg.Paths)
+	debugLog("[audit] starting log tailer for sources: %v", tailer.Sources())
 
 	// Sliding window for recent log context lines (up to 20 lines)
 	const maxContextLogs = 20
