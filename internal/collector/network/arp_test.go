@@ -2,6 +2,7 @@ package network
 
 import (
 	"testing"
+	"time"
 )
 
 func TestGetARP(t *testing.T) {
@@ -18,12 +19,38 @@ func TestGetARP(t *testing.T) {
 }
 
 func TestGetInterfaces(t *testing.T) {
-	ifaces, err := GetInterfaces()
+	collector := NewInterfaceCollector()
+	ifaces1, err := collector.Collect()
 	if err != nil {
-		t.Fatalf("GetInterfaces returned error: %v", err)
+		t.Fatalf("Collect returned error: %v", err)
 	}
-	t.Logf("GetInterfaces returned %d interfaces", len(ifaces))
-	if len(ifaces) == 0 {
+	t.Logf("Collect returned %d interfaces", len(ifaces1))
+	if len(ifaces1) == 0 {
 		t.Errorf("expected at least 1 interface")
+	}
+
+	var hasTraffic bool
+	for _, iface := range ifaces1 {
+		if iface.BytesRecv > 0 || iface.BytesSent > 0 {
+			hasTraffic = true
+			t.Logf("  Interface %s: status=%s, rx_bytes=%d, tx_bytes=%d, rx_mbps=%.4f",
+				iface.Name, iface.Status, iface.BytesRecv, iface.BytesSent, iface.RxMbps)
+		}
+	}
+	if !hasTraffic {
+		t.Logf("Warning: no traffic counters found on any interface (may happen in some test containers)")
+	}
+
+	// Wait briefly and collect again to test rate calculation
+	time.Sleep(100 * time.Millisecond)
+	ifaces2, err := collector.Collect()
+	if err != nil {
+		t.Fatalf("Second Collect returned error: %v", err)
+	}
+	for _, iface := range ifaces2 {
+		if iface.BytesRecv > 0 || iface.BytesSent > 0 {
+			t.Logf("  Second pass Interface %s: rx_mbps=%.4f, tx_mbps=%.4f, rx_pps=%.2f, tx_pps=%.2f",
+				iface.Name, iface.RxMbps, iface.TxMbps, iface.RxPps, iface.TxPps)
+		}
 	}
 }

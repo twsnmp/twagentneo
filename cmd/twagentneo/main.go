@@ -633,9 +633,11 @@ func checkResourceThresholds(m *resource.Metrics, cfg config.ResourceCollectorCo
 
 // runNetworkCollector periodically collects network interface, ARP, and TCP connection state.
 func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.NetworkCollectorConfig) {
+	ifaceCollector := network.NewInterfaceCollector()
+
 	collect := func() {
 		// 1. Network Interfaces
-		ifaces, err := network.GetInterfaces()
+		ifaces, err := ifaceCollector.Collect()
 		if err != nil {
 			log.Printf("[network] get interfaces error: %v", err)
 		} else {

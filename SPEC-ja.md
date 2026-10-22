@@ -87,6 +87,8 @@ CGOを一切使用せず、OSネイティブのSyscallおよびGo標準パッケ
   - **macOS**: ルーティングソケット（`sysctl` の `NET_RT_FLAGS` + `RTF_LLINFO`）のパース
 - **ネットワークインターフェイス状態**:
   - `net.Interfaces()` によるリンク状態、IP/MACアドレス、MTUの取得
+  - `github.com/shirou/gopsutil/v4/net` (`IOCounters`) によるトラフィックカウンタ（送受信バイト数、パケット数、エラー数、破棄数）の取得
+  - 収集サイクル間の差分による単位時間値の自動計算: 通信速度（`rx_mbps`, `tx_mbps`）、パケットレート（`rx_pps`, `tx_pps`）、エラーレート（`rx_error_pps`, `tx_error_pps`）、破棄レート（`rx_drop_pps`, `tx_drop_pps`）
 - **TCP接続先・用途モニタリング**:
   - `github.com/shirou/gopsutil/v4/net` (`Connections("tcp")`) を活用したPure Goクロスプラットフォーム実装。
   - ループバック（`127.0.0.1`, `::1`）および未確立接続を除外し、`ESTABLISHED` なアクティブ接続のみを常時抽出。

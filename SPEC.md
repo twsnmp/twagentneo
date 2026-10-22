@@ -87,6 +87,8 @@ All collectors are implemented strictly in Pure Go without CGO, utilizing OS nat
   - **macOS**: Routing socket inspection via `sysctl` (`NET_RT_FLAGS` + `RTF_LLINFO`).
 - **Network Interface State**:
   - Network interface states, IP/MAC addresses, and MTU via `net.Interfaces()`.
+  - Interface-level traffic counters (RX/TX bytes, packets, errors, drops) via `github.com/shirou/gopsutil/v4/net` (`IOCounters`).
+  - Unit-time rates calculated between consecutive collections: throughput (`rx_mbps`, `tx_mbps`), packet rates (`rx_pps`, `tx_pps`), error rates (`rx_error_pps`, `tx_error_pps`), and drop rates (`rx_drop_pps`, `tx_drop_pps`).
 - **TCP Connection & Destination Monitoring**:
   - Leverages `github.com/shirou/gopsutil/v4/net` (`Connections("tcp")`) in Pure Go across platforms.
   - Automatically filters out loopback (`127.0.0.1`, `::1`) and unestablished connections, targeting `ESTABLISHED` sockets.
