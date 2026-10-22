@@ -291,7 +291,13 @@ type serviceRunner struct {
 	cancel     context.CancelFunc
 }
 
-func (s *serviceRunner) Start() error {
+func (s *serviceRunner) Start() (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("agent runner panic: %v", r)
+			log.Printf("[FATAL] %v", err)
+		}
+	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 	return runAgent(ctx, s.configPath, s.debugFlag)
@@ -302,6 +308,20 @@ func (s *serviceRunner) Stop() error {
 		s.cancel()
 	}
 	return nil
+}
+
+func setupServiceLogging(exeDir string) {
+	candidates := []string{
+		filepath.Join(exeDir, "twagentneo.log"),
+		filepath.Join(os.TempDir(), "twagentneo.log"),
+	}
+	for _, p := range candidates {
+		if f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			log.SetOutput(f)
+			log.Printf("twagentneo service logging initialized at %s", p)
+			return
+		}
+	}
 }
 
 func main() {
@@ -337,11 +357,7 @@ func main() {
 		if exe, err := os.Executable(); err == nil {
 			exeDir := filepath.Dir(exe)
 			_ = os.Chdir(exeDir)
-
-			logFilePath := filepath.Join(exeDir, "twagentneo.log")
-			if logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
-				log.SetOutput(logFile)
-			}
+			setupServiceLogging(exeDir)
 		}
 	}
 

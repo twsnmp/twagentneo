@@ -283,6 +283,11 @@ func (w *winService) Execute(args []string, r <-chan svc.ChangeRequest, changes 
 	// Start agent handler asynchronously (handler.Start blocks until shutdown or error)
 	errCh := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				errCh <- fmt.Errorf("service panic: %v", r)
+			}
+		}()
 		errCh <- w.handler.Start()
 	}()
 
