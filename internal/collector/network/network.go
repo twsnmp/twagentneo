@@ -3,7 +3,6 @@ package network
 
 import (
 	"net"
-	"time"
 )
 
 // ARPEntry represents a single ARP cache / neighbor entry.
@@ -30,13 +29,6 @@ type InterfaceInfo struct {
 	ErrOut      uint64   `json:"err_out"`
 	DropIn      uint64   `json:"drop_in"`
 	DropOut     uint64   `json:"drop_out"`
-}
-
-// Snapshot is a point-in-time view of network state.
-type Snapshot struct {
-	Timestamp  time.Time       `json:"timestamp"`
-	Interfaces []InterfaceInfo `json:"interfaces"`
-	ARP        []ARPEntry      `json:"arp"`
 }
 
 // GetInterfaces returns the current state of all network interfaces using
@@ -78,31 +70,4 @@ func GetInterfaces() ([]InterfaceInfo, error) {
 // It returns the current ARP / neighbor cache entries.
 func GetARP() ([]ARPEntry, error) {
 	return getARP()
-}
-
-// Collect assembles a complete network Snapshot.
-// An optional arpWatch bool flag can be passed to enable or disable ARP collection (defaults to true).
-func Collect(arpWatch ...bool) (*Snapshot, error) {
-	s := &Snapshot{Timestamp: time.Now()}
-
-	ifaces, err := GetInterfaces()
-	if err != nil {
-		return nil, err
-	}
-	s.Interfaces = ifaces
-
-	enableARP := true
-	if len(arpWatch) > 0 {
-		enableARP = arpWatch[0]
-	}
-
-	if enableARP {
-		arp, err := GetARP()
-		if err == nil {
-			s.ARP = arp
-		}
-	}
-	// ARP collection errors are non-fatal.
-
-	return s, nil
 }

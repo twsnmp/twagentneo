@@ -80,14 +80,18 @@ All collectors are implemented strictly in Pure Go without CGO, utilizing OS nat
   - Disk: usage per mount point, I/O rates (bytes read/written, IOPS)
   - Network Traffic: interface-level RX/TX bytes, packet counts, drop/error rates
 
-### 3.2 Network & ARP Cache (`collector/network`)
+### 3.2 Network, ARP & TCP Connection State (`collector/network`)
 - **ARP / Neighbor Cache Acquisition**:
   - **Linux**: Parsing `/proc/net/arp` or Netlink socket (RTM_GETNEIGH) in Pure Go.
   - **Windows**: Direct syscall invocation of `iphlpapi.dll`'s `GetIpNetTable2`.
   - **macOS**: Routing socket inspection via `sysctl` (`NET_RT_FLAGS` + `RTF_LLINFO`).
-- **Network State**:
+- **Network Interface State**:
   - Network interface states, IP/MAC addresses, and MTU via `net.Interfaces()`.
-  - Listening sockets and port bindings (`/proc/net/tcp`, `/proc/net/udp`, Windows `GetExtendedTcpTable`).
+- **TCP Connection & Destination Monitoring**:
+  - Leverages `github.com/shirou/gopsutil/v4/net` (`Connections("tcp")`) in Pure Go across platforms.
+  - Automatically filters out loopback (`127.0.0.1`, `::1`) and unestablished connections, targeting `ESTABLISHED` sockets.
+  - Automatically resolves originating process names via `gopsutil/v4/process` with in-cycle PID caching.
+  - Aggregates connections by `remote_ip` and `process`, identifying known services (e.g., `https`, `ssh`, `dns`, `mqtts`) and connection counts (`count`).
 
 ### 3.3 Security & Integrity Auditing (`collector/security`)
 #### A. File Integrity Monitoring (FIM)
@@ -201,8 +205,9 @@ All exporters are built using Pure Go packages with zero CGO dependencies.
 - Pure Go MQTT client (`paho.mqtt.golang`).
 - Topic Hierarchy:
   - Metrics: `twsnmpneo/agent/{agent_id}/metrics`
-  - Network: `twsnmpneo/agent/{agent_id}/network`
+  - Interface: `twsnmpneo/agent/{agent_id}/interface`
   - ARP Watch: `twsnmpneo/agent/{agent_id}/arp`
+  - TCP Watch: `twsnmpneo/agent/{agent_id}/tcp`
   - Security Alerts: `twsnmpneo/agent/{agent_id}/alert`
   - Health/LWT: `twsnmpneo/agent/{agent_id}/status`
 - Alert payloads include the complete structured `ai_judge` field.
@@ -277,6 +282,7 @@ collectors:
     enabled: true
     interval: 180s
     arp_watch: true
+    tcp_watch: true
   fim:
     enabled: true
   logs:

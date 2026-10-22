@@ -11,6 +11,7 @@ collectors:
     enabled: true
     interval: 180s
     arp_watch: true
+    tcp_watch: true
   fim:
     enabled: true
     paths:

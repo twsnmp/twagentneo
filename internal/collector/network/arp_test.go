@@ -17,20 +17,13 @@ func TestGetARP(t *testing.T) {
 	}
 }
 
-func TestCollectWithARPWatch(t *testing.T) {
-	// With ARP collection enabled (default)
-	snap1, err := Collect(true)
+func TestGetInterfaces(t *testing.T) {
+	ifaces, err := GetInterfaces()
 	if err != nil {
-		t.Fatalf("Collect(true) returned error: %v", err)
+		t.Fatalf("GetInterfaces returned error: %v", err)
 	}
-	t.Logf("Collect(true): %d interfaces, %d ARP entries", len(snap1.Interfaces), len(snap1.ARP))
-
-	// With ARP collection disabled
-	snap2, err := Collect(false)
-	if err != nil {
-		t.Fatalf("Collect(false) returned error: %v", err)
-	}
-	if len(snap2.ARP) != 0 {
-		t.Errorf("expected 0 ARP entries when arp_watch=false, got %d", len(snap2.ARP))
+	t.Logf("GetInterfaces returned %d interfaces", len(ifaces))
+	if len(ifaces) == 0 {
+		t.Errorf("expected at least 1 interface")
 	}
 }

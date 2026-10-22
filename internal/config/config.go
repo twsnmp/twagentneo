@@ -27,11 +27,12 @@ type ResourceCollectorConfig struct {
 	LoadThreshold float64       `mapstructure:"load_threshold"` // LoadAvg1 threshold (0 to disable)
 }
 
-// NetworkCollectorConfig holds configuration for the network/ARP collector.
+// NetworkCollectorConfig holds configuration for the network/ARP/TCP collector.
 type NetworkCollectorConfig struct {
 	Enabled  bool          `mapstructure:"enabled"`
 	Interval time.Duration `mapstructure:"interval"`
 	ARPWatch bool          `mapstructure:"arp_watch"`
+	TCPWatch bool          `mapstructure:"tcp_watch"`
 }
 
 // FIMCollectorConfig holds configuration for the file integrity monitor.
@@ -154,6 +155,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("collectors.network.enabled", true)
 	v.SetDefault("collectors.network.interval", "180s")
 	v.SetDefault("collectors.network.arp_watch", true)
+	v.SetDefault("collectors.network.tcp_watch", true)
 	v.SetDefault("collectors.fim.enabled", true)
 	v.SetDefault("collectors.logs.enabled", true)
 	v.SetDefault("audit.sigma.enabled", true)

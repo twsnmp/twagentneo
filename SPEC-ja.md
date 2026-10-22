@@ -80,14 +80,18 @@ CGOを一切使用せず、OSネイティブのSyscallおよびGo標準パッケ
   - ディスク（マウントポイント別使用率、I/Oレート）
   - ネットワークトラフィック（IF別 送受信バイト数、パケット数、エラー数）
 
-### 3.2 ネットワーク・ARPテーブル (`collector/network`)
+### 3.2 ネットワーク・ARPテーブル・TCP接続先 (`collector/network`)
 - **ARP/近隣キャッシュ取得**:
   - **Linux**: `/proc/net/arp` のパース、またはNetlinkソケットによる近隣キャッシュ（RTM_GETNEIGH）取得
   - **Windows**: `iphlpapi.dll` の `GetIpNetTable2` を `syscall` で直接呼び出し
   - **macOS**: ルーティングソケット（`sysctl` の `NET_RT_FLAGS` + `RTF_LLINFO`）のパース
-- **ネットワーク状態**:
+- **ネットワークインターフェイス状態**:
   - `net.Interfaces()` によるリンク状態、IP/MACアドレス、MTUの取得
-  - リスニングポートおよびソケット一覧（`/proc/net/tcp`, `/proc/net/udp`、Windows API `GetExtendedTcpTable` 等）
+- **TCP接続先・用途モニタリング**:
+  - `github.com/shirou/gopsutil/v4/net` (`Connections("tcp")`) を活用したPure Goクロスプラットフォーム実装。
+  - ループバック（`127.0.0.1`, `::1`）および未確立接続を除外し、`ESTABLISHED` なアクティブ接続のみを常時抽出。
+  - `gopsutil/v4/process` を通じて接続元プロセス名をキャッシュ付きで自動解決。
+  - 宛先IP (`remote_ip`) とプロセス名 (`process`) をキーとして集約し、ポート番号に基づく主要サービス名一覧 (`services`) と接続数 (`count`) を保持。
 
 ### 3.3 セキュリティ・整合性監視 (`collector/security`)
 #### A. ファイル整合性監視 (FIM)
@@ -198,8 +202,9 @@ iso(1).org(3).dod(6).internet(1).private(4).enterprises(1).twise(17862)
 - Pure Go MQTTライブラリ使用。
 - トピック設計:
   - メトリクス: `twsnmpneo/agent/{agent_id}/metrics`
-  - ネットワーク: `twsnmpneo/agent/{agent_id}/network`
+  - インターフェイス: `twsnmpneo/agent/{agent_id}/interface`
   - ARP監視: `twsnmpneo/agent/{agent_id}/arp`
+  - TCP接続監視: `twsnmpneo/agent/{agent_id}/tcp`
   - セキュリティアラート: `twsnmpneo/agent/{agent_id}/alert`
   - 死活ステータス (LWT): `twsnmpneo/agent/{agent_id}/status`
 - セキュリティアラートのPayloadには `ai_judge` フィールドが完全な形で埋め込まれる。
@@ -274,6 +279,7 @@ collectors:
     enabled: true
     interval: 180s
     arp_watch: true
+    tcp_watch: true
   fim:
     enabled: true
   logs:

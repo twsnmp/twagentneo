@@ -402,10 +402,10 @@ func dispatchEvent(
 			}
 		}
 
-	case pipeline.EventTypeNetwork:
+	case pipeline.EventTypeInterface:
 		if mqttExp != nil {
-			if err := mqttExp.PublishNetwork(ev.Payload); err != nil {
-				log.Printf("[dispatch] mqtt network error: %v", err)
+			if err := mqttExp.PublishInterface(ev.Payload); err != nil {
+				log.Printf("[dispatch] mqtt interface error: %v", err)
 			}
 		}
 
@@ -413,6 +413,13 @@ func dispatchEvent(
 		if mqttExp != nil {
 			if err := mqttExp.PublishARP(ev.Payload); err != nil {
 				log.Printf("[dispatch] mqtt arp error: %v", err)
+			}
+		}
+
+	case pipeline.EventTypeTCP:
+		if mqttExp != nil {
+			if err := mqttExp.PublishTCP(ev.Payload); err != nil {
+				log.Printf("[dispatch] mqtt tcp error: %v", err)
 			}
 		}
 
@@ -560,17 +567,35 @@ func checkResourceThresholds(m *resource.Metrics, cfg config.ResourceCollectorCo
 	}
 }
 
-// runNetworkCollector periodically collects network and ARP state.
+// runNetworkCollector periodically collects network interface, ARP, and TCP connection state.
 func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.NetworkCollectorConfig) {
 	collect := func() {
-		snap, err := network.Collect(cfg.ARPWatch)
+		// 1. Network Interfaces
+		ifaces, err := network.GetInterfaces()
 		if err != nil {
-			log.Printf("[network] collect error: %v", err)
-			return
+			log.Printf("[network] get interfaces error: %v", err)
+		} else {
+			bus.PublishInterface(ifaces)
 		}
-		bus.PublishNetwork(snap)
-		if cfg.ARPWatch && snap.ARP != nil {
-			bus.PublishARP(snap.ARP)
+
+		// 2. ARP Watch
+		if cfg.ARPWatch {
+			arp, err := network.GetARP()
+			if err != nil {
+				log.Printf("[network] get arp error: %v", err)
+			} else {
+				bus.PublishARP(arp)
+			}
+		}
+
+		// 3. TCP Connections Watch
+		if cfg.TCPWatch {
+			tcpConns, err := network.GetTCPConnections()
+			if err != nil {
+				log.Printf("[network] get tcp connections error: %v", err)
+			} else {
+				bus.PublishTCP(tcpConns)
+			}
 		}
 	}
 
