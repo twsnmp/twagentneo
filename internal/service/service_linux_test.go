@@ -30,14 +30,17 @@ func TestFormatServiceArgs(t *testing.T) {
 
 	expectedAbs, _ := filepath.Abs(relDir)
 
-	if len(formatted) != 3 {
-		t.Fatalf("expected 3 formatted args, got %d: %v", len(formatted), formatted)
+	if len(formatted) != 4 {
+		t.Fatalf("expected 4 formatted args, got %d: %v", len(formatted), formatted)
 	}
 	if formatted[0] != "-debug" {
 		t.Errorf("expected -debug, got %s", formatted[0])
 	}
 	if formatted[1] != "-config" || formatted[2] != expectedAbs {
 		t.Errorf("expected -config %s, got %v", expectedAbs, formatted)
+	}
+	if formatted[3] != "-config="+expectedAbs {
+		t.Errorf("expected -config=%s, got %s", expectedAbs, formatted[3])
 	}
 }
 
