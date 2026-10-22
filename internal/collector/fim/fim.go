@@ -4,6 +4,7 @@
 package fim
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
@@ -22,9 +24,9 @@ func defaultPaths() []string {
 	switch runtime.GOOS {
 	case "windows":
 		return []string{
-			`C:\Windows\System32`,
-			`C:\Windows\SysWOW64`,
-			`C:\Program Files`,
+			`C:\Windows\System32\drivers\etc`,
+			`C:\Windows\System32\wbem`,
+			`C:\Windows\System32\WindowsPowerShell\v1.0`,
 		}
 	case "darwin":
 		return []string{
@@ -70,9 +72,22 @@ func New(paths []string) (*Watcher, error) {
 	return w, nil
 }
 
+const (
+	maxWatchDirs  = 1024
+	maxWatchDepth = 4
+)
+
 // Start begins watching. Emitted events are sent to Events().
-func (w *Watcher) Start() error {
+func (w *Watcher) Start(ctx context.Context) error {
 	for _, p := range w.paths {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-w.done:
+			return nil
+		default:
+		}
+
 		// Check if the root path itself is accessible before walking.
 		if _, err := os.Stat(p); err != nil {
 			log.Printf("[fim] skipping %s: %v", p, err)
@@ -80,7 +95,10 @@ func (w *Watcher) Start() error {
 		}
 		// Walk subdirectories to add recursive watches.
 		// Permission-denied on sub-directories is silently skipped.
-		if err := addRecursive(w.watcher, p); err != nil {
+		if err := addRecursive(ctx, w.watcher, p, w.done); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			log.Printf("[fim] warning: cannot watch %s: %v", p, err)
 		}
 	}
@@ -184,8 +202,21 @@ func sha256File(path string) string {
 
 // addRecursive recursively adds path and all readable sub-directories to watcher.
 // Subdirectories that are not accessible due to permission are skipped silently.
-func addRecursive(fw *fsnotify.Watcher, root string) error {
-	return filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+// Supports cancellation via ctx and done channel, with depth and count limits.
+func addRecursive(ctx context.Context, fw *fsnotify.Watcher, root string, done chan struct{}) error {
+	count := 0
+	cleanRoot := filepath.Clean(root)
+	rootDepth := strings.Count(cleanRoot, string(filepath.Separator))
+
+	return filepath.WalkDir(cleanRoot, func(p string, d os.DirEntry, err error) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-done:
+			return filepath.SkipAll
+		default:
+		}
+
 		if err != nil {
 			// Permission denied on a sub-dir: skip it without reporting.
 			if os.IsPermission(err) {
@@ -194,12 +225,24 @@ func addRecursive(fw *fsnotify.Watcher, root string) error {
 			return nil // other errors also skipped
 		}
 		if d.IsDir() {
+			currentDepth := strings.Count(p, string(filepath.Separator)) - rootDepth
+			if currentDepth > maxWatchDepth {
+				return filepath.SkipDir
+			}
+
+			if count >= maxWatchDirs {
+				log.Printf("[fim] directory limit (%d) reached for %s, skipping remaining subdirectories", maxWatchDirs, root)
+				return filepath.SkipDir
+			}
+
 			if addErr := fw.Add(p); addErr != nil {
 				if os.IsPermission(addErr) {
 					return filepath.SkipDir
 				}
 				// Log unexpected errors but don't abort the whole walk.
 				log.Printf("[fim] cannot add watch for %s: %v", p, addErr)
+			} else {
+				count++
 			}
 		}
 		return nil

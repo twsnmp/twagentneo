@@ -254,12 +254,17 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
 		log.Printf("received signal %v — shutting down", sig)
 		cancel()
+
+		// A second signal forces immediate exit
+		sig = <-sigCh
+		log.Printf("received second signal %v — forcing exit", sig)
+		os.Exit(1)
 	}()
 
 	// --- Internal Event Bus ---
@@ -385,8 +390,21 @@ func main() {
 	// Wait for shutdown.
 	<-ctx.Done()
 	log.Println("twagentneo stopping...")
-	wg.Wait()
-	log.Println("twagentneo stopped cleanly.")
+
+	// Graceful shutdown with timeout protection
+	shutdownDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(shutdownDone)
+	}()
+
+	select {
+	case <-shutdownDone:
+		log.Println("twagentneo stopped cleanly.")
+	case <-time.After(5 * time.Second):
+		log.Println("[WARN] shutdown timed out after 5s — forcing clean exit")
+		os.Exit(0)
+	}
 }
 
 // runDispatch reads events from the bus subscription and routes them to exporters.
@@ -671,7 +689,7 @@ func runFIMCollector(ctx context.Context, bus *pipeline.Bus, cfg config.FIMColle
 		log.Printf("[fim] init error: %v", err)
 		return
 	}
-	if err := watcher.Start(); err != nil {
+	if err := watcher.Start(ctx); err != nil {
 		log.Printf("[fim] start error: %v", err)
 		return
 	}

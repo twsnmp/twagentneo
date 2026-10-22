@@ -22,6 +22,7 @@ var (
 	procEvtRender             = modwevtapi.NewProc("EvtRender")
 	modkernel32               = windows.NewLazySystemDLL("kernel32.dll")
 	procCreateEventW          = modkernel32.NewProc("CreateEventW")
+	procSetEvent              = modkernel32.NewProc("SetEvent")
 	procWaitForSingleObject   = modkernel32.NewProc("WaitForSingleObject")
 )
 
@@ -71,8 +72,8 @@ type winEventXML struct {
 func (t *Tailer) tailSource(channel string) {
 	defer t.wg.Done()
 
-	// Create a manual-reset event handle for notifications
-	hEvent, _, err := procCreateEventW.Call(0, 1, 0, 0)
+	// Create an auto-reset event handle for notifications (bManualReset = 0)
+	hEvent, _, err := procCreateEventW.Call(0, 0, 0, 0)
 	if hEvent == 0 {
 		log.Printf("[logtail] CreateEventW failed for %s: %v", channel, err)
 		return
@@ -110,14 +111,20 @@ func (t *Tailer) tailSource(channel string) {
 		default:
 		}
 
-		// Wait for new event signal (500ms timeout to check t.done)
-		res, _, _ := procWaitForSingleObject.Call(hEvent, 500)
+		// Wait for new event signal (250ms timeout to promptly check t.done)
+		res, _, _ := procWaitForSingleObject.Call(hEvent, 250)
 		if res != waitObject0 {
 			continue
 		}
 
 		// Pull available events
 		for {
+			select {
+			case <-t.done:
+				return
+			default:
+			}
+
 			var hEvt uintptr
 			var returned uint32
 			r, _, _ := procEvtNext.Call(hSub, 1, uintptr(unsafe.Pointer(&hEvt)), 0, 0, uintptr(unsafe.Pointer(&returned)))
