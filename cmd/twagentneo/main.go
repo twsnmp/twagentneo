@@ -287,27 +287,19 @@ type serviceRunner struct {
 	configPath string
 	debugFlag  bool
 	cancel     context.CancelFunc
-	done       chan struct{}
-	err        error
 }
 
 func (s *serviceRunner) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
-	s.done = make(chan struct{})
-	go func() {
-		defer close(s.done)
-		s.err = runAgent(ctx, s.configPath, s.debugFlag)
-	}()
-	return nil
+	return runAgent(ctx, s.configPath, s.debugFlag)
 }
 
 func (s *serviceRunner) Stop() error {
 	if s.cancel != nil {
 		s.cancel()
 	}
-	<-s.done
-	return s.err
+	return nil
 }
 
 func main() {
@@ -335,9 +327,16 @@ func main() {
 
 	// If invoked as a Windows Service by SCM:
 	// Adjust current working directory to executable directory to avoid System32 path resolution
+	// and configure service file logging.
 	if service.IsWindowsService() {
 		if exe, err := os.Executable(); err == nil {
-			_ = os.Chdir(filepath.Dir(exe))
+			exeDir := filepath.Dir(exe)
+			_ = os.Chdir(exeDir)
+
+			logFilePath := filepath.Join(exeDir, "twagentneo.log")
+			if logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+				log.SetOutput(logFile)
+			}
 		}
 	}
 
@@ -351,7 +350,7 @@ func main() {
 	checkUpdateFlag := flag.Bool("check-update", false, "Check for available twagentneo updates")
 
 	// Service management flags
-	serviceCmd := flag.String("service", "", "Service action for Windows SCM or Linux systemd (install, remove, start, stop, status)")
+	serviceCmd := flag.String("service", "", "Service action for Windows SCM or Linux systemd (install, remove, start, stop, restart, status)")
 	serviceAuto := flag.Bool("service-auto", false, "Set service startup type to automatic when installing")
 	serviceDelayed := flag.Bool("service-delayed", false, "Set service startup type to automatic (delayed) when installing")
 
@@ -369,6 +368,16 @@ func main() {
 		}
 		handleUpdateCommand(updateArgs)
 		os.Exit(0)
+	}
+
+	// Resolve configuration file with smart fallback (twagentneo.yaml or config.yaml)
+	resolvedConfig := *configPath
+	if _, err := os.Stat(resolvedConfig); os.IsNotExist(err) {
+		if _, err := os.Stat("twagentneo.yaml"); err == nil {
+			resolvedConfig = "twagentneo.yaml"
+		} else if _, err := os.Stat("config.yaml"); err == nil {
+			resolvedConfig = "config.yaml"
+		}
 	}
 
 	// Handle flag-based service management: -service <action>
@@ -395,7 +404,7 @@ func main() {
 	if service.IsWindowsService() {
 		log.Printf("Starting TWAGENT NEO as Windows Service (%s)", service.ServiceName)
 		runner := &serviceRunner{
-			configPath: *configPath,
+			configPath: resolvedConfig,
 			debugFlag:  debugFlag,
 		}
 		if err := service.Run(service.ServiceName, runner); err != nil {
@@ -422,7 +431,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	if err := runAgent(ctx, *configPath, debugFlag); err != nil {
+	if err := runAgent(ctx, resolvedConfig, debugFlag); err != nil {
 		log.Fatalf("twagentneo error: %v", err)
 	}
 }

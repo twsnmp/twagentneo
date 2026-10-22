@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
@@ -93,11 +94,15 @@ func Install(opts InstallOptions) error {
 	}
 	defer s.Close()
 
+	_ = eventlog.InstallAsEventCreate(ServiceName, eventlog.Error|eventlog.Warning|eventlog.Info)
+
 	return nil
 }
 
 // Remove uninstalls the Windows service.
 func Remove() error {
+	_ = eventlog.Remove(ServiceName)
+
 	m, err := mgr.Connect()
 	if err != nil {
 		return fmt.Errorf("failed to connect to Service Control Manager: %w (please run as Administrator)", err)
@@ -264,33 +269,56 @@ func (w *winService) Execute(args []string, r <-chan svc.ChangeRequest, changes 
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	changes <- svc.Status{State: svc.StartPending}
 
-	// Start agent handler asynchronously
+	elog, _ := eventlog.Open(ServiceName)
+	if elog != nil {
+		defer elog.Close()
+		_ = elog.Info(1, fmt.Sprintf("Service %s is starting", ServiceName))
+	}
+
+	// Start agent handler asynchronously (handler.Start blocks until shutdown or error)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- w.handler.Start()
 	}()
 
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+	if elog != nil {
+		_ = elog.Info(1, fmt.Sprintf("Service %s running successfully", ServiceName))
+	}
 
 	for {
 		select {
 		case err := <-errCh:
 			if err != nil {
 				log.Printf("Windows service execution error: %v", err)
+				if elog != nil {
+					_ = elog.Error(1, fmt.Sprintf("Service stopped unexpectedly with error: %v", err))
+				}
+				changes <- svc.Status{State: svc.StopPending}
+				_ = w.handler.Stop()
+				changes <- svc.Status{State: svc.Stopped}
+				return false, 1
 			}
 			changes <- svc.Status{State: svc.StopPending}
 			_ = w.handler.Stop()
 			changes <- svc.Status{State: svc.Stopped}
-			return false, 1
+			return false, 0
 
 		case c := <-r:
 			switch c.Cmd {
 			case svc.Interrogate:
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
+				if elog != nil {
+					_ = elog.Info(1, fmt.Sprintf("Service %s received stop/shutdown request", ServiceName))
+				}
 				changes <- svc.Status{State: svc.StopPending}
 				_ = w.handler.Stop()
+				<-errCh // Wait for handler.Start() to finish clean exit
 				changes <- svc.Status{State: svc.Stopped}
+				if elog != nil {
+					_ = elog.Info(1, fmt.Sprintf("Service %s stopped cleanly", ServiceName))
+				}
 				return false, 0
 			default:
 				log.Printf("Unexpected control request: %v", c.Cmd)
