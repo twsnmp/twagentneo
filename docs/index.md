@@ -25,6 +25,7 @@ For log auditing, twagentneo integrates a Pure Go **Sigma evaluation engine** po
 - **Two-Tier Hybrid Threat Auditing (Sigma × tensai)**:
   - **Tier 1 (Sub-millisecond / Ultra-low Footprint)**: Built-in curated Sigma rules filter high-volume incoming log streams down to candidate suspicious events within milliseconds.
   - **Tier 2 (Intelligent Local Triage)**: Evaluates candidate events locally using the embedded LLM engine `tensai` to assess real threats, eliminate false positives, score risk (0-100), and generate actionable remediation advisories.
+- **Windows Service & Linux systemd Integration**: Native background service installation, automatic startup on boot, and complete lifecycle management via `twagentneo service` commands.
 - **Zero-Configuration Operation**: Curated Sigma rules for Linux, macOS, and Windows are directly embedded into the binary via `embed.FS`. No external rule management required.
 - **OS-Adaptive Selective Loading**: Automatically inspects `runtime.GOOS` on boot to index only relevant platform rules, keeping idle CPU usage below 1% and resident memory footprint within 30–50MB.
 - **Multi-Protocol Telemetry Exporters**: Delivers metrics and rich security alerts to TWSNMP NEO via **MQTT** (real-time stream), **Syslog** (RFC 5424 / RFC 3164), and **SNMP TRAP** (dedicated enterprise MIB).
@@ -126,6 +127,18 @@ mise run build
 make build
 ```
 
+### 3.5 Running the Agent
+
+Start the agent directly from the command line:
+
+```bash
+# Standard execution with configuration file
+twagentneo -config config.yaml
+
+# Verbose console debug logging (-debug or -d)
+twagentneo -config config.yaml -debug
+```
+
 ---
 
 ## 4. Configuration Guide (`config.yaml`)
@@ -214,7 +227,7 @@ Acquires host metrics via native system calls and `/proc` without external CLI i
 - **Threshold Alerts**: Triggers immediate resource alerts if values exceed configured limits.
 
 ### 5.2 Network State Monitoring (`network`)
-- **Interfaces**: MAC address, IP assignments, MTU, and interface link status (UP/DOWN).
+- **Interfaces**: MAC address, IP assignments, MTU, interface link status (UP/DOWN), and real-time traffic statistics including byte/packet counters and per-second rates (`BytesInRate`, `BytesOutRate`, `PacketsInRate`, `PacketsOutRate`).
 - **ARP Table (`arp_watch`)**: Collects local ARP cache mappings to detect IP conflict or rogue device introduction.
 - **TCP Connections (`tcp_watch`)**: Discovers active `ESTABLISHED` outbound connections, identifying remote IP and port destinations (e.g. C2 or abnormal exfiltration channels).
 
@@ -285,14 +298,14 @@ Emits SNMPv2c / SNMPv3 traps using the enterprise MIB tree (OID: `.1.3.6.1.4.1.1
 
 ---
 
-## 8. Operations & Self-Update
+## 8. Operations & Service Management
 
 ### 8.1 Checking Agent Version
 
 ```bash
 twagentneo -version
 # Sample output:
-# twagentneo v0.1.0 (commit: 068f493, built: 2026-10-22T15:35:00Z, darwin/arm64)
+# twagentneo v0.2.0 (commit: abc1234, built: 2026-10-23T06:00:00Z, darwin/arm64)
 ```
 
 ### 8.2 Self-Updating CLI
@@ -314,6 +327,36 @@ twagentneo update -version v0.2.0
 ```
 
 > **Smart Environment Detection**: If installed via Homebrew, `twagentneo` advises running `brew upgrade`. Inside Docker containers, it suggests pulling the latest image tag.
+
+### 8.3 Service Management (Windows Service & Linux systemd)
+
+Run `twagentneo` continuously in the background with native OS service managers.
+
+#### Windows Service (Administrator PowerShell / CMD)
+```powershell
+# Install Windows service with auto-start enabled
+.\twagentneo.exe service install -service-auto -config C:\twagentneo\config.yaml
+
+# Manage service lifecycle
+.\twagentneo.exe service start
+.\twagentneo.exe service restart
+.\twagentneo.exe service status
+.\twagentneo.exe service stop
+.\twagentneo.exe service remove
+```
+
+#### Linux systemd Service (root / sudo)
+```bash
+# Install systemd service unit with auto-start enabled
+sudo /usr/local/bin/twagentneo service install -auto -config /etc/twagentneo/config.yaml
+
+# Manage service lifecycle
+sudo /usr/local/bin/twagentneo service start
+sudo /usr/local/bin/twagentneo service restart
+sudo /usr/local/bin/twagentneo service status
+sudo /usr/local/bin/twagentneo service stop
+sudo /usr/local/bin/twagentneo service remove
+```
 
 ---
 

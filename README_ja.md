@@ -9,6 +9,8 @@ TWSNMP NEO 向け Pure Go クロスプラットフォーム監視 & AI セキュ
 - **Pure Go シングルバイナリ (`CGO_ENABLED=0`)**: 外部 C ライブラリ依存ゼロ。Linux、macOS、Windows ですぐに稼働可能。
 - **内蔵 Sigma 評価エンジン**: 厳選されたセキュリティルールをバイナリ内蔵（`embed.FS`）。外部ルール管理の手間なく即座に利用可能。
 - **ローカル AI トリアージ**: 組み込み LLM エンジン `tensai` によるローカル判定（LLM-as-a-Judge）。誤検知の抑制と実践的な対処アドバイザリを付与。
+- **Windows サービス & Linux systemd 対応**: `twagentneo service install/start/stop/restart/status/remove` コマンドで OS ネイティブのバックグラウンド常駐・自動起動を一元管理。
+- **ネットワークトラフィック & システム監視**: ネットワーク帯域レート（Bytes/Packets In/Out レート）、ARP テーブル、TCP 接続先追跡、CPU/メモリ/ディスクを網羅。
 - **自己アップデート対応**: 内蔵 CLI アップデーター（`twagentneo update`）。Homebrew やコンテナ環境を自動識別。
 - **マルチプロトコル連携**: MQTT、Syslog、SNMP TRAP で TWSNMP NEO にリアルタイム送信。
 
@@ -74,7 +76,7 @@ twagentneo -config config.yaml -debug
 
 ```bash
 twagentneo -version
-# twagentneo v0.1.0 (commit: abc1234, built: 2026-10-22T08:00:00Z, darwin/arm64)
+# twagentneo v0.2.0 (commit: abc1234, built: 2026-10-23T06:00:00Z, darwin/arm64)
 ```
 
 ### セルフアップデート

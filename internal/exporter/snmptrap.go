@@ -45,8 +45,8 @@ const (
 	oidHeartbeat      = oidTrapsPrefix + ".4"
 )
 
-// AgentVersion is set at build time via ldflags.
-var AgentVersion = "v0.1.0"
+// AgentVersion is set at build time via ldflags or initialized from main.
+var AgentVersion = "v0.2.0"
 
 // SNMPTrapExporter sends SNMP v2c/v3 traps per the twagentNeo MIB (SPEC.md §5).
 type SNMPTrapExporter struct {

@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	version = "v0.1.0"
+	version = "v0.2.0"
 	commit  = ""
 	date    = "unknown"
 
@@ -53,6 +53,7 @@ func init() {
 	if version != "" && !strings.HasPrefix(version, "v") && version != "dev" && version != "unknown" {
 		version = "v" + version
 	}
+	exporter.AgentVersion = version
 }
 
 func resolveCommit() string {

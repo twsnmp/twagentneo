@@ -85,7 +85,7 @@ go build -o twagentneo ./cmd/twagentneo
 起動に成功すると、内蔵 Sigma ルールが OS に合わせて自動ロードされます（macOS の場合は darwin 用ルール 33 件）。
 
 ```text
-twagentneo v0.1.0 starting — os=darwin arch=arm64
+twagentneo v0.2.0 starting — os=darwin arch=arm64
 agent id=twagentneo-test name=Local-TestHost
 [sigma] engine ready: os=darwin rules=33
 [sigma] loaded 33 rules for darwin

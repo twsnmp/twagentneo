@@ -25,6 +25,7 @@ layout: default
 - **2段階ハイブリッド脅威監査 (Sigma × tensai)**:
   - **第1層 (超高速・超低負荷)**: 内蔵の厳選 Sigma ルールにより、毎秒数千行のログから疑わしいイベントのみをミリ秒単位で高速抽出。
   - **第2層 (インテリジェントローカル判定)**: 抽出されたイベントに対し、端末ローカルで動作する `tensai` が前後コンテキストを踏まえて誤検知排除・脅威スコアリング・日本語での推奨対処手順（アドバイザリ）を付与。
+- **Windows サービス & Linux systemd 対応**: `twagentneo service` コマンドによる OS ネイティブのバックグラウンド常駐サービス化、自動起動、ライフサイクル管理をサポート。
 - **ゼロコンフィグ運用**: OS（Linux、macOS、Windows）に応じた主要 Sigma ルールをバイナリ内蔵（`embed.FS`）。外部ルールファイルを用意することなく起動直後から脅威監視を開始。
 - **OS 自動判定による極小リソースフットプリント**: 起動時に実行環境の OS を自動認識し、必要なルールのみをインデックス化。アイドル時 CPU 1% 未満、常駐メモリ 30〜50MB 程度の極めて軽量な動作を実現。
 - **マルチプロトコル送信**: 収集したメトリクスや高度に構造化されたアラートを、**MQTT**（リアルタイムストリーム）、**Syslog**（RFC 5424/3164）、**SNMP TRAP**（専用 MIB 定義）で TWSNMP NEO（および FC/FK）へ送信。
@@ -126,6 +127,18 @@ mise run build
 make build
 ```
 
+### 3.5 エージェントの起動
+
+コマンドラインから直接起動できます：
+
+```bash
+# 設定ファイルを指定して標準起動
+twagentneo -config config.yaml
+
+# 詳細デバッグログを標準出力に出力して起動 (-debug または -d)
+twagentneo -config config.yaml -debug
+```
+
 ---
 
 ## 4. 設定ガイド (`config.yaml`)
@@ -214,7 +227,7 @@ Pure Go のシステムコールおよび `/proc`・OS API 経由でホストリ
 - **しきい値アラート**: 設定値を超過した場合、即座にリソースアラートイベントを発行。
 
 ### 5.2 ネットワーク監視 (`network`)
-- **インターフェース情報**: MAC アドレス、IP アドレス、MTU、インターフェースの UP/DOWN 状態。
+- **インターフェース情報**: MAC アドレス、IP アドレス、MTU、インターフェースの UP/DOWN 状態、および送受信カウンターとリアルタイム送受信レート（`BytesInRate`、`BytesOutRate`、`PacketsInRate`、`PacketsOutRate`）。
 - **ARP テーブル (`arp_watch`)**: 近隣 IP アドレスと物理 MAC アドレスの対応関係を収集。IP なりすましや未知のデバイス接続を検知。
 - **TCP 接続監視 (`tcp_watch`)**: 確立中（ESTABLISHED）の外部宛先 IP・ポート番号を追跡。C2 サーバーや不審なアウトバウンド通信を捕捉。
 
@@ -285,14 +298,14 @@ MQTT エクスポーターは、TWSNMP NEO のイベントパイプラインに�
 
 ---
 
-## 8. 運用管理 & 自動更新
+## 8. 運用管理 & サービス常駐
 
 ### 8.1 バージョン情報確認
 
 ```bash
 twagentneo -version
 # 出力例:
-# twagentneo v0.1.0 (commit: 068f493, built: 2026-10-22T15:35:00Z, darwin/arm64)
+# twagentneo v0.2.0 (commit: abc1234, built: 2026-10-23T06:00:00Z, darwin/arm64)
 ```
 
 ### 8.2 セルフアップデートコマンド
@@ -314,6 +327,36 @@ twagentneo update -version v0.2.0
 ```
 
 > **環境認識機能**: Homebrew 経由でインストールされている場合は `brew upgrade` を促し、コンテナ環境ではイメージ再取得を案内するなど、実行環境に応じた最適な更新方法を提示します。
+
+### 8.3 サービス管理（Windows サービス & Linux systemd）
+
+`twagentneo` は OS ネイティブのバックグラウンド常駐サービスとして動作させるための管理サブコマンドを備えています：
+
+#### Windows サービス（管理者権限 PowerShell / CMD）
+```powershell
+# OS 起動時の自動起動を有効にして Windows サービスに登録
+.\twagentneo.exe service install -service-auto -config C:\twagentneo\config.yaml
+
+# ライフサイクル管理
+.\twagentneo.exe service start
+.\twagentneo.exe service restart
+.\twagentneo.exe service status
+.\twagentneo.exe service stop
+.\twagentneo.exe service remove
+```
+
+#### Linux systemd（root / sudo）
+```bash
+# systemd ユニット (/etc/systemd/system/twagentneo.service) を登録して自動起動有効化
+sudo /usr/local/bin/twagentneo service install -auto -config /etc/twagentneo/config.yaml
+
+# ライフサイクル管理
+sudo /usr/local/bin/twagentneo service start
+sudo /usr/local/bin/twagentneo service restart
+sudo /usr/local/bin/twagentneo service status
+sudo /usr/local/bin/twagentneo service stop
+sudo /usr/local/bin/twagentneo service remove
+```
 
 ---
 
