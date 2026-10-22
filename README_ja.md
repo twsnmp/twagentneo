@@ -87,6 +87,44 @@ twagentneo update -check
 twagentneo update
 ```
 
+### サービス管理 (Windows サービス & Linux systemd)
+
+TWSNMP NEO (`twsnmpneo`) と同様に、バックグラウンドサービスとして登録・管理することができます。
+
+#### Windows サービス常駐
+管理者権限の PowerShell / コマンドプロンプトで実行します：
+
+```powershell
+# Windows サービスとして登録（OS起動時に自動起動）
+.\twagentneo.exe service install -service-auto -config C:\twagentneo\config.yaml
+
+# サービスの開始
+.\twagentneo.exe service start
+
+# 状態確認
+.\twagentneo.exe service status
+
+# サービスの停止
+.\twagentneo.exe service stop
+
+# サービスの削除
+.\twagentneo.exe service remove
+```
+
+#### Linux systemd サービス常駐
+root 権限 (sudo) で実行します：
+
+```bash
+# systemd サービスとして登録（OS起動時に自動起動）
+sudo /usr/local/bin/twagentneo service install -auto -config /etc/twagentneo/config.yaml
+
+# サービスの開始
+sudo /usr/local/bin/twagentneo service start
+
+# 状態確認
+sudo /usr/local/bin/twagentneo service status
+```
+
 ---
 
 ## テストと動作検証

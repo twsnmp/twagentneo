@@ -253,8 +253,13 @@ twagentneo/
 │   │   └── snmptrap.go
 │   ├── config/
 │   │   └── config.go
-│   └── pipeline/
-│       └── bus.go
+│   ├── pipeline/
+│   │   └── bus.go
+│   └── service/                     # サービスライフサイクル管理 (Windows SCM & systemd)
+│       ├── service.go
+│       ├── service_windows.go
+│       ├── service_linux.go
+│       └── service_other.go
 ├── config.example.yaml
 ├── go.mod
 ├── go.sum
@@ -349,13 +354,18 @@ exporters:
     curl -fsSL https://raw.githubusercontent.com/twsnmp/twagentneo/main/install/install.sh | sh
     ```
 
-### 9.3 セルフアップデート機能 & CLI仕様
+### 9.3 セルフアップデート、サービス常駐 & CLI仕様
 - **CLIコマンド・フラグ**:
   - `twagentneo -version` / `twagentneo version`: バージョン番号、Gitコミットハッシュ、ビルド日時、実行アーキテクチャを表示。
   - `twagentneo update`: GitHub Releasesの最新版を取得しバイナリを安全に自己置換。
   - `twagentneo update -check` (または `-check-update`): 更新確認のみ実施。
   - `twagentneo update -yes`: 確認プロンプトをスキップして即時更新。
   - `twagentneo update -version <tag>`: 指定したバージョンへ更新/ロールバック。
+  - `twagentneo service <install|remove|start|stop|status>` / `-service <action>`: Windowsサービス (SCM) または Linuxサービス (systemd) の管理。
+    - `-auto` / `-service-auto`: インストール時にOS起動時の自動開始を設定。
+    - `-delayed` / `-service-delayed`: Windowsサービスインストール時に自動開始 (遅延開始) を設定。
+    - `service install` 時に渡された設定パス（`-config` など）は絶対パスに解決されて登録。
+    - Windows SCMから起動された場合、カレントディレクトリを実行ファイル配置ディレクトリに自動調整し、相対パス設定ファイルもスムーズに読み込み。
 - **環境に配慮した更新ガード (`internal/updater`)**:
   - **Homebrew環境**: 自動検知し、`brew upgrade twagentneo` の実行を案内。
   - **コンテナ環境**: コンテナ内更新を抑止し、イメージの再取得を案内。

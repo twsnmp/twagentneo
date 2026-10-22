@@ -256,8 +256,13 @@ twagentneo/
 │   │   └── snmptrap.go
 │   ├── config/
 │   │   └── config.go
-│   └── pipeline/
-│       └── bus.go                   # Non-blocking internal event dispatch
+│   ├── pipeline/
+│   │   └── bus.go                   # Non-blocking internal event dispatch
+│   └── service/                     # Service lifecycle manager (Windows SCM & systemd)
+│       ├── service.go
+│       ├── service_windows.go
+│       ├── service_linux.go
+│       └── service_other.go
 ├── config.example.yaml
 ├── go.mod
 ├── go.sum
@@ -351,13 +356,18 @@ exporters:
     curl -fsSL https://raw.githubusercontent.com/twsnmp/twagentneo/main/install/install.sh | sh
     ```
 
-### 9.3 Self-Update & CLI Operations
+### 9.3 Self-Update, Service & CLI Operations
 - **CLI Commands & Flags**:
   - `twagentneo -version` / `twagentneo version`: Displays semantic version, git commit hash, build timestamp, and runtime architecture.
   - `twagentneo update`: Automatically checks GitHub Releases and safely replaces the running executable.
   - `twagentneo update -check` (or `-check-update`): Checks for available updates without applying.
   - `twagentneo update -yes`: Applies the update without interactive confirmation prompts.
   - `twagentneo update -version <tag>`: Updates or rollbacks to a specific release tag.
+  - `twagentneo service <install|remove|start|stop|status>` / `-service <action>`: Manages the agent background service on Windows (SCM) or Linux (systemd).
+    - `-auto` / `-service-auto`: Configures automatic startup on system boot during installation.
+    - `-delayed` / `-service-delayed`: Configures automatic (delayed) startup during installation on Windows SCM.
+    - Additional CLI flags (such as `-config`) passed during `service install` are preserved and resolved to absolute paths.
+    - When executed under Windows Service Control Manager, the working directory is automatically set to the executable location.
 - **Environment-Aware Update Safety (`internal/updater`)**:
   - **Homebrew**: Detects Homebrew installation path and prompts the user to run `brew upgrade twagentneo`.
   - **Containers**: Detects container environments and prompts image pulling.

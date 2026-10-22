@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"github.com/twsnmp/twagentneo/internal/config"
 	"github.com/twsnmp/twagentneo/internal/exporter"
 	"github.com/twsnmp/twagentneo/internal/pipeline"
+	"github.com/twsnmp/twagentneo/internal/service"
 	"github.com/twsnmp/twagentneo/internal/updater"
 )
 
@@ -197,6 +199,109 @@ func handleUpdateCommand(args []string) {
 	os.Exit(0)
 }
 
+func handleServiceCommand(action string, remainingArgs []string) {
+	switch strings.ToLower(action) {
+	case "install":
+		var autoStart bool
+		var delayedStart bool
+		var serviceArgs []string
+
+		for i := 0; i < len(remainingArgs); i++ {
+			arg := remainingArgs[i]
+			if arg == "-auto" || arg == "--auto" || arg == "-service-auto" || arg == "--service-auto" {
+				autoStart = true
+			} else if arg == "-delayed" || arg == "--delayed" || arg == "-service-delayed" || arg == "--service-delayed" {
+				delayedStart = true
+			} else {
+				serviceArgs = append(serviceArgs, arg)
+			}
+		}
+
+		err := service.Install(service.InstallOptions{
+			AutoStart:    autoStart,
+			DelayedStart: delayedStart,
+			Arguments:    serviceArgs,
+		})
+		if err != nil {
+			fmt.Printf("Failed to install service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Service %q installed successfully.\n", service.ServiceName)
+		if delayedStart {
+			fmt.Println("Startup type: Automatic (Delayed Start)")
+		} else if autoStart {
+			fmt.Println("Startup type: Automatic")
+		} else {
+			fmt.Println("Startup type: Manual")
+		}
+		os.Exit(0)
+
+	case "remove", "uninstall":
+		if err := service.Remove(); err != nil {
+			fmt.Printf("Failed to remove service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Service %q removed successfully.\n", service.ServiceName)
+		os.Exit(0)
+
+	case "start":
+		if err := service.Start(); err != nil {
+			fmt.Printf("Failed to start service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Service %q started successfully.\n", service.ServiceName)
+		os.Exit(0)
+
+	case "stop":
+		if err := service.Stop(); err != nil {
+			fmt.Printf("Failed to stop service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Service %q stopped successfully.\n", service.ServiceName)
+		os.Exit(0)
+
+	case "status":
+		st, err := service.Status()
+		if err != nil {
+			fmt.Printf("Failed to query service status: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Service %q status: %s\n", service.ServiceName, st)
+		os.Exit(0)
+
+	default:
+		fmt.Printf("Unknown service command %q. Available commands: install, remove, start, stop, status\n", action)
+		os.Exit(1)
+	}
+}
+
+type serviceRunner struct {
+	configPath string
+	debugFlag  bool
+	cancel     context.CancelFunc
+	done       chan struct{}
+	err        error
+}
+
+func (s *serviceRunner) Start() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.done = make(chan struct{})
+	go func() {
+		defer close(s.done)
+		s.err = runAgent(ctx, s.configPath, s.debugFlag)
+	}()
+	return nil
+}
+
+func (s *serviceRunner) Stop() error {
+	if s.cancel != nil {
+		s.cancel()
+	}
+	<-s.done
+	return s.err
+}
+
 func main() {
 	// Subcommand handling
 	if len(os.Args) >= 2 {
@@ -208,6 +313,23 @@ func main() {
 		case "update":
 			handleUpdateCommand(os.Args[2:])
 			os.Exit(0)
+		case "service":
+			if len(os.Args) < 3 {
+				fmt.Println("Usage: twagentneo service <install|remove|start|stop|status> [options]")
+				os.Exit(1)
+			}
+			action := os.Args[2]
+			remaining := os.Args[3:]
+			handleServiceCommand(action, remaining)
+			return
+		}
+	}
+
+	// If invoked as a Windows Service by SCM:
+	// Adjust current working directory to executable directory to avoid System32 path resolution
+	if service.IsWindowsService() {
+		if exe, err := os.Executable(); err == nil {
+			_ = os.Chdir(filepath.Dir(exe))
 		}
 	}
 
@@ -219,6 +341,12 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	updateFlag := flag.Bool("update", false, "Update twagentneo to the latest release")
 	checkUpdateFlag := flag.Bool("check-update", false, "Check for available twagentneo updates")
+
+	// Service management flags
+	serviceCmd := flag.String("service", "", "Service action for Windows SCM or Linux systemd (install, remove, start, stop, status)")
+	serviceAuto := flag.Bool("service-auto", false, "Set service startup type to automatic when installing")
+	serviceDelayed := flag.Bool("service-delayed", false, "Set service startup type to automatic (delayed) when installing")
+
 	flag.Parse()
 
 	if *showVersion {
@@ -235,22 +363,41 @@ func main() {
 		os.Exit(0)
 	}
 
-	c := resolveCommit()
-	log.Printf("twagentneo %s (commit: %s) starting — os=%s arch=%s", version, c, runtime.GOOS, runtime.GOARCH)
-
-	// --- Load Configuration ---
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		log.Fatalf("config load: %v", err)
+	// Handle flag-based service management: -service <action>
+	if *serviceCmd != "" {
+		var extraArgs []string
+		if *serviceAuto {
+			extraArgs = append(extraArgs, "-auto")
+		}
+		if *serviceDelayed {
+			extraArgs = append(extraArgs, "-delayed")
+		}
+		// Forward any configuration flags passed alongside
+		for _, arg := range os.Args[1:] {
+			if strings.HasPrefix(arg, "-service") || strings.HasPrefix(arg, "--service") {
+				continue
+			}
+			extraArgs = append(extraArgs, arg)
+		}
+		handleServiceCommand(*serviceCmd, extraArgs)
+		return
 	}
-	if debugFlag || strings.EqualFold(cfg.Agent.LogLevel, "debug") {
-		debugEnabled = true
-		log.Println("[debug] debug logging enabled")
-	}
-	log.Printf("agent id=%s name=%s", cfg.Agent.ID, cfg.Agent.Name)
-	debugLog("configuration loaded from %s", *configPath)
 
-	// --- Context for graceful shutdown ---
+	// If running under Windows Service Control Manager, dispatch to service runner
+	if service.IsWindowsService() {
+		log.Printf("Starting TWAGENT NEO as Windows Service (%s)", service.ServiceName)
+		runner := &serviceRunner{
+			configPath: *configPath,
+			debugFlag:  debugFlag,
+		}
+		if err := service.Run(service.ServiceName, runner); err != nil {
+			log.Printf("Service execution failed: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Standalone interactive execution
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -266,6 +413,27 @@ func main() {
 		log.Printf("received second signal %v — forcing exit", sig)
 		os.Exit(1)
 	}()
+
+	if err := runAgent(ctx, *configPath, debugFlag); err != nil {
+		log.Fatalf("twagentneo error: %v", err)
+	}
+}
+
+func runAgent(ctx context.Context, configPath string, debugFlag bool) error {
+	c := resolveCommit()
+	log.Printf("twagentneo %s (commit: %s) starting — os=%s arch=%s", version, c, runtime.GOOS, runtime.GOARCH)
+
+	// --- Load Configuration ---
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("config load: %w", err)
+	}
+	if debugFlag || strings.EqualFold(cfg.Agent.LogLevel, "debug") {
+		debugEnabled = true
+		log.Println("[debug] debug logging enabled")
+	}
+	log.Printf("agent id=%s name=%s", cfg.Agent.ID, cfg.Agent.Name)
+	debugLog("configuration loaded from %s", configPath)
 
 	// --- Internal Event Bus ---
 	bus := pipeline.New()
@@ -403,8 +571,9 @@ func main() {
 		log.Println("twagentneo stopped cleanly.")
 	case <-time.After(5 * time.Second):
 		log.Println("[WARN] shutdown timed out after 5s — forcing clean exit")
-		os.Exit(0)
 	}
+
+	return nil
 }
 
 // runDispatch reads events from the bus subscription and routes them to exporters.

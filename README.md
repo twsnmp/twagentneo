@@ -87,6 +87,44 @@ twagentneo update -check
 twagentneo update
 ```
 
+### Service Management (Windows Service & Linux systemd)
+
+Just like `twsnmpneo`, you can install and manage `twagentneo` as a background service.
+
+#### Windows Service
+Run in an elevated Administrator PowerShell or Command Prompt:
+
+```powershell
+# Install as a Windows service (automatic start on boot)
+.\twagentneo.exe service install -service-auto -config C:\twagentneo\config.yaml
+
+# Start service
+.\twagentneo.exe service start
+
+# Query status
+.\twagentneo.exe service status
+
+# Stop service
+.\twagentneo.exe service stop
+
+# Remove service
+.\twagentneo.exe service remove
+```
+
+#### Linux systemd Service
+Run with root / sudo privileges:
+
+```bash
+# Install as a systemd service (automatic start on boot)
+sudo /usr/local/bin/twagentneo service install -auto -config /etc/twagentneo/config.yaml
+
+# Start service
+sudo /usr/local/bin/twagentneo service start
+
+# Query status
+sudo /usr/local/bin/twagentneo service status
+```
+
 ---
 
 ## Testing & Verification
