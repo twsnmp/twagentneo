@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -46,31 +47,129 @@ func defaultPaths() []string {
 	}
 }
 
+// defaultExcludes returns commonly ignored temporary file patterns.
+func defaultExcludes() []string {
+	return []string{
+		"*.tmp",
+		"*~",
+	}
+}
+
 // Watcher wraps fsnotify and emits audit.FIMEvent on changes.
 type Watcher struct {
-	watcher *fsnotify.Watcher
-	paths   []string
-	eventCh chan *audit.FIMEvent
-	done    chan struct{}
-	once    sync.Once
+	watcher          *fsnotify.Watcher
+	paths            []string
+	excludes         []string
+	compiledExcludes []*regexp.Regexp
+	eventCh          chan *audit.FIMEvent
+	done             chan struct{}
+	once             sync.Once
 }
 
 // New creates a FIM Watcher. If paths is empty, the OS-appropriate defaults are used.
-func New(paths []string) (*Watcher, error) {
+// If excludes is nil, defaultExcludes() (*.tmp, *~) is used. Pass an empty slice to disable exclusions.
+func New(paths []string, excludes []string) (*Watcher, error) {
 	if len(paths) == 0 {
 		paths = defaultPaths()
 	}
+	if excludes == nil {
+		excludes = defaultExcludes()
+	}
+	var compiled []*regexp.Regexp
+	for _, p := range excludes {
+		re, err := compileExcludePattern(p)
+		if err != nil {
+			log.Printf("[fim] invalid exclude pattern %q: %v", p, err)
+			continue
+		}
+		if re != nil {
+			compiled = append(compiled, re)
+		}
+	}
+
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("fim: create watcher: %w", err)
 	}
 	w := &Watcher{
-		watcher: fw,
-		paths:   paths,
-		eventCh: make(chan *audit.FIMEvent, 512),
-		done:    make(chan struct{}),
+		watcher:          fw,
+		paths:            paths,
+		excludes:         excludes,
+		compiledExcludes: compiled,
+		eventCh:          make(chan *audit.FIMEvent, 512),
+		done:             make(chan struct{}),
 	}
 	return w, nil
+}
+
+// normalizePath converts both Windows and Unix backslashes/slashes to a clean forward-slash path.
+func normalizePath(path string) string {
+	cleaned := filepath.Clean(strings.ReplaceAll(path, `\`, "/"))
+	return strings.ReplaceAll(cleaned, `\`, "/")
+}
+
+// compileExcludePattern converts a glob-like pattern (*, **, ?) to a compiled regexp.
+func compileExcludePattern(pattern string) (*regexp.Regexp, error) {
+	trimmed := strings.TrimSpace(pattern)
+	if trimmed == "" {
+		return nil, nil
+	}
+	pattern = strings.ReplaceAll(trimmed, `\`, "/")
+	var b strings.Builder
+	if runtime.GOOS == "windows" {
+		b.WriteString("(?i)")
+	}
+
+	hasSlash := strings.Contains(pattern, "/")
+	if !hasSlash {
+		b.WriteString("(?:^|/)")
+	} else if !strings.HasPrefix(pattern, "/") && !strings.Contains(pattern, ":/") {
+		b.WriteString("(?:^|.*/)")
+	} else {
+		b.WriteString("^")
+	}
+
+	i := 0
+	n := len(pattern)
+	for i < n {
+		if i+1 < n && pattern[i:i+2] == "**" {
+			b.WriteString(".*")
+			i += 2
+			if i < n && pattern[i] == '/' {
+				b.WriteString("(?:/.*)?")
+				i++
+			}
+			continue
+		}
+		switch pattern[i] {
+		case '*':
+			b.WriteString("[^/]*")
+		case '?':
+			b.WriteString("[^/]")
+		case '.', '+', '(', ')', '|', '{', '}', '[', ']', '^', '$', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(pattern[i])
+		default:
+			b.WriteByte(pattern[i])
+		}
+		i++
+	}
+	b.WriteString("$")
+	return regexp.Compile(b.String())
+}
+
+// isExcluded returns true if path matches any compiled exclude regex.
+func (w *Watcher) isExcluded(path string) bool {
+	if len(w.compiledExcludes) == 0 {
+		return false
+	}
+	normalized := normalizePath(path)
+	for _, re := range w.compiledExcludes {
+		if re != nil && re.MatchString(normalized) {
+			return true
+		}
+	}
+	return false
 }
 
 const (
@@ -96,7 +195,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 		}
 		// Walk subdirectories to add recursive watches.
 		// Permission-denied on sub-directories is silently skipped.
-		if err := addRecursive(ctx, w.watcher, p, w.done); err != nil {
+		if err := addRecursive(ctx, w.watcher, p, w.done, w.isExcluded); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -140,6 +239,9 @@ func (w *Watcher) loop() {
 }
 
 func (w *Watcher) handleEvent(ev fsnotify.Event) {
+	if w.isExcluded(ev.Name) {
+		return
+	}
 	op := fsnotifyOpToStr(ev.Op)
 	if op == "" {
 		return
@@ -205,7 +307,7 @@ func sha256File(path string) string {
 // addRecursive recursively adds path and all readable sub-directories to watcher.
 // Subdirectories that are not accessible due to permission are skipped silently.
 // Supports cancellation via ctx and done channel, with depth and count limits.
-func addRecursive(ctx context.Context, fw *fsnotify.Watcher, root string, done chan struct{}) error {
+func addRecursive(ctx context.Context, fw *fsnotify.Watcher, root string, done chan struct{}, isExcluded func(string) bool) error {
 	count := 0
 	cleanRoot := filepath.Clean(root)
 	rootDepth := strings.Count(cleanRoot, string(filepath.Separator))
@@ -225,6 +327,12 @@ func addRecursive(ctx context.Context, fw *fsnotify.Watcher, root string, done c
 				return filepath.SkipDir
 			}
 			return nil // other errors also skipped
+		}
+		if isExcluded != nil && isExcluded(p) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if d.IsDir() {
 			currentDepth := strings.Count(p, string(filepath.Separator)) - rootDepth

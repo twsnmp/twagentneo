@@ -911,7 +911,7 @@ func runNetworkCollector(ctx context.Context, bus *pipeline.Bus, cfg config.Netw
 
 // runFIMCollector starts the file integrity monitor.
 func runFIMCollector(ctx context.Context, bus *pipeline.Bus, cfg config.FIMCollectorConfig) {
-	watcher, err := fim.New(cfg.Paths)
+	watcher, err := fim.New(cfg.Paths, cfg.Excludes)
 	if err != nil {
 		log.Printf("[fim] init error: %v", err)
 		return

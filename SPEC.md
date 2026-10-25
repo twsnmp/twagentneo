@@ -100,6 +100,7 @@ All collectors are implemented strictly in Pure Go without CGO, utilizing OS nat
 - Detects unauthorized file creation, modification, deletion, and permission changes across critical system paths.
 - Engine: OS native event watchers (Linux: `inotify`, Windows: `ReadDirectoryChangesW`, macOS: `kqueue`).
 - Checksum: Pure Go `crypto/sha256`.
+- Exclusion Filtering: Supports glob pattern exclusion (e.g., `*.tmp`, `*~`) to suppress false positives from temporary or editor backup files. Defaults to `["*.tmp", "*~"]`.
 
 #### B. Log Stream Follower (Log Tailer)
 - Real-time tailing of OS security logs with automatic log rotation tracking.
@@ -292,6 +293,7 @@ collectors:
     tcp_watch: true
   fim:
     enabled: true
+    # excludes: ["*.tmp", "*~"]
   logs:
     enabled: true
 

@@ -37,8 +37,9 @@ type NetworkCollectorConfig struct {
 
 // FIMCollectorConfig holds configuration for the file integrity monitor.
 type FIMCollectorConfig struct {
-	Enabled bool     `mapstructure:"enabled"`
-	Paths   []string `mapstructure:"paths"`
+	Enabled  bool     `mapstructure:"enabled"`
+	Paths    []string `mapstructure:"paths"`
+	Excludes []string `mapstructure:"excludes"`
 }
 
 // LogsCollectorConfig holds configuration for the log tailer.
@@ -157,6 +158,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("collectors.network.arp_watch", true)
 	v.SetDefault("collectors.network.tcp_watch", true)
 	v.SetDefault("collectors.fim.enabled", true)
+	v.SetDefault("collectors.fim.excludes", []string{"*.tmp", "*~"})
 	v.SetDefault("collectors.logs.enabled", true)
 	v.SetDefault("audit.sigma.enabled", true)
 	v.SetDefault("audit.ai_judge.enabled", false)

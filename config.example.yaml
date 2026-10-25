@@ -20,7 +20,13 @@ collectors:
       - /usr/bin
       - /usr/sbin
       # Windows defaults (ignored on non-Windows)
-      # - C:\Windows\System32
+      # - C:\Windows\System32\drivers\etc
+      # - C:\Windows\System32\wbem
+      # - C:\Windows\System32\WindowsPowerShell\v1.0
+    excludes:
+      # Exclude temporary or backup file patterns (default: ["*.tmp", "*~"])
+      - "*.tmp"
+      - "*~"
   logs:
     enabled: true
     paths:

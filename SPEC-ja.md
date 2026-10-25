@@ -100,6 +100,7 @@ CGOを一切使用せず、OSネイティブのSyscallおよびGo標準パッケ
 - 主要システムファイル・設定ディレクトリの改ざん検知（新規作成、更新、削除、属性変更）。
 - 監視方式: OSネイティブイベント（Linux: `inotify`, Windows: `ReadDirectoryChangesW`, macOS: `kqueue`）。
 - ハッシュアルゴリズム: `crypto/sha256`。
+- 除外パターンフィルタ: 一時ファイルやバックアップファイルの過剰アラートを抑制するため、Globパターン除外（`*.tmp`, `*~` 等）に対応。デフォルトで `["*.tmp", "*~"]` を除外。
 
 #### B. ログストリーム収集 (Log Tailer)
 - OS標準のセキュリティログを追従読み込み（ローテーション自動追従）。
@@ -289,6 +290,7 @@ collectors:
     tcp_watch: true
   fim:
     enabled: true
+    # excludes: ["*.tmp", "*~"]
   logs:
     enabled: true
 

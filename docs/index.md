@@ -170,6 +170,9 @@ collectors:
       - /etc
       - /usr/bin
       - /usr/sbin
+    excludes:                   # Exclude patterns (glob patterns, default: *.tmp, *~)
+      - "*.tmp"
+      - "*~"
   logs:
     enabled: true
     paths:                      # Optional custom log files (empty = OS defaults)
@@ -236,6 +239,7 @@ Watches target paths recursively using `fsnotify` and OS-native kernel notificat
 - Tracks file creation (`CREATE`), modification (`WRITE`), deletion (`REMOVE`), and rename (`RENAME`).
 - Computes SHA-256 hashes on modification to record cryptographic file diffs.
 - Safeguards critical system binaries and configuration paths (`/etc`, `/usr/bin`, Windows `System32`).
+- **Exclusion Filters (`excludes`)**: Filters out transient scratch files (e.g., `*.tmp`, editor backup files `*~`) to prevent alert fatigue (defaults to `["*.tmp", "*~"]`).
 
 ### 5.4 OS Log Tailer (`logs`)
 Follows OS security event logs automatically:
