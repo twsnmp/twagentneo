@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/twsnmp/twagentneo/internal/audit"
@@ -145,8 +146,9 @@ func (w *Watcher) handleEvent(ev fsnotify.Event) {
 	}
 
 	fev := &audit.FIMEvent{
-		Op:   op,
-		Path: ev.Name,
+		Timestamp: time.Now().UTC(),
+		Op:        op,
+		Path:      ev.Name,
 	}
 
 	// Compute SHA-256 for create/write operations.
