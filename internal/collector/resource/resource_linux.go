@@ -4,6 +4,7 @@ package resource
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -32,6 +33,33 @@ func isVirtualOrNetworkFs(fstype string) bool {
 		return true
 	}
 	return false
+}
+
+// shouldIncludeLinuxPartition determines whether a disk partition should be monitored on Linux.
+func shouldIncludeLinuxPartition(p disk.PartitionStat) bool {
+	if isVirtualOrNetworkFs(p.Fstype) {
+		return false
+	}
+
+	// Skip loop devices (e.g. snap mounts, ISO images)
+	if strings.HasPrefix(p.Device, "/dev/loop") {
+		return false
+	}
+
+	// Skip snap paths
+	if strings.HasPrefix(p.Mountpoint, "/snap") {
+		return false
+	}
+
+	// Skip container/runtime directory mounts that duplicate host filesystems
+	if strings.HasPrefix(p.Mountpoint, "/var/lib/docker/") ||
+		strings.HasPrefix(p.Mountpoint, "/var/lib/containers/") ||
+		strings.HasPrefix(p.Mountpoint, "/var/lib/kubelet/") ||
+		strings.HasPrefix(p.Mountpoint, "/run/") {
+		return false
+	}
+
+	return true
 }
 
 func (c *linuxCollector) Collect(prev *Metrics) (*Metrics, error) {
@@ -69,10 +97,19 @@ func (c *linuxCollector) Collect(prev *Metrics) (*Metrics, error) {
 	parts, err := disk.PartitionsWithContext(ctx, false)
 	cancel()
 	if err == nil {
+		seenDevices := make(map[string]bool)
 		for _, p := range parts {
-			if isVirtualOrNetworkFs(p.Fstype) {
+			if !shouldIncludeLinuxPartition(p) {
 				continue
 			}
+			// Deduplicate if multiple mount points use the exact same device
+			if p.Device != "" {
+				if seenDevices[p.Device] {
+					continue
+				}
+				seenDevices[p.Device] = true
+			}
+
 			uctx, ucancel := context.WithTimeout(context.Background(), 2*time.Second)
 			usage, err := disk.UsageWithContext(uctx, p.Mountpoint)
 			ucancel()

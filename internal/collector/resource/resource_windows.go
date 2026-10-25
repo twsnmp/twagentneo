@@ -3,6 +3,8 @@
 package resource
 
 import (
+	"context"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -17,6 +19,25 @@ type windowsCollector struct{}
 // New returns the platform-specific Collector implementation.
 func New() Collector {
 	return &windowsCollector{}
+}
+
+// shouldIncludeWindowsPartition determines whether a disk partition should be monitored on Windows.
+// It excludes optical discs, virtual ISOs, and read-only media to prevent false capacity alerts.
+func shouldIncludeWindowsPartition(p disk.PartitionStat) bool {
+	// Skip optical drives and virtual ISO images
+	switch strings.ToUpper(p.Fstype) {
+	case "CDFS", "UDF":
+		return false
+	}
+
+	// Skip read-only volumes (e.g. CD-ROM, write-protected recovery)
+	for _, opt := range p.Opts {
+		if opt == "ro" {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (c *windowsCollector) Collect(prev *Metrics) (*Metrics, error) {
@@ -44,10 +65,29 @@ func (c *windowsCollector) Collect(prev *Metrics) (*Metrics, error) {
 	}
 
 	// --- Disk ---
-	parts, err := disk.Partitions(false)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	parts, err := disk.PartitionsWithContext(ctx, false)
+	cancel()
 	if err == nil {
+		seenDevices := make(map[string]bool)
 		for _, p := range parts {
-			usage, err := disk.Usage(p.Mountpoint)
+			if !shouldIncludeWindowsPartition(p) {
+				continue
+			}
+			target := p.Mountpoint
+			if target == "" {
+				target = p.Device
+			}
+			if target != "" {
+				if seenDevices[target] {
+					continue
+				}
+				seenDevices[target] = true
+			}
+
+			uctx, ucancel := context.WithTimeout(context.Background(), 2*time.Second)
+			usage, err := disk.UsageWithContext(uctx, p.Mountpoint)
+			ucancel()
 			if err != nil {
 				continue
 			}

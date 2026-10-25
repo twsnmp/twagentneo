@@ -3,6 +3,8 @@
 package resource
 
 import (
+	"context"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -18,6 +20,41 @@ type darwinCollector struct{}
 // New returns the platform-specific Collector implementation.
 func New() Collector {
 	return &darwinCollector{}
+}
+
+// shouldIncludeDarwinPartition determines whether a disk partition should be monitored on macOS.
+// It excludes virtual/pseudo filesystems, internal APFS helper volumes, Time Machine snapshots,
+// and filesystems mounted with the "nobrowse" flag.
+func shouldIncludeDarwinPartition(p disk.PartitionStat) bool {
+	// Skip pseudo-filesystems and network filesystems
+	switch p.Fstype {
+	case "devfs", "autofs", "nullfs", "smbfs", "nfs", "afpfs":
+		return false
+	}
+
+	// Skip system internal mounts marked with "nobrowse" (MNT_DONTBROWSE)
+	for _, opt := range p.Opts {
+		if opt == "nobrowse" {
+			return false
+		}
+	}
+
+	// Skip macOS internal system volume paths (APFS helper volumes)
+	if strings.HasPrefix(p.Mountpoint, "/System/Volumes") {
+		return false
+	}
+
+	// Skip hidden mounts under /Volumes (e.g. /Volumes/.timemachine)
+	if strings.HasPrefix(p.Mountpoint, "/Volumes/.") {
+		return false
+	}
+
+	// Skip Time Machine snapshot pseudo-devices
+	if strings.HasPrefix(p.Device, "com.apple.TimeMachine") {
+		return false
+	}
+
+	return true
 }
 
 func (c *darwinCollector) Collect(prev *Metrics) (*Metrics, error) {
@@ -51,14 +88,26 @@ func (c *darwinCollector) Collect(prev *Metrics) (*Metrics, error) {
 	}
 
 	// --- Disk ---
-	parts, err := disk.Partitions(false)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	parts, err := disk.PartitionsWithContext(ctx, false)
+	cancel()
 	if err == nil {
+		seenDevices := make(map[string]bool)
 		for _, p := range parts {
-			// Skip pseudo-filesystems common on macOS
-			if p.Fstype == "devfs" || p.Fstype == "autofs" {
+			if !shouldIncludeDarwinPartition(p) {
 				continue
 			}
-			usage, err := disk.Usage(p.Mountpoint)
+			// Deduplicate if multiple mount points use the exact same device
+			if p.Device != "" {
+				if seenDevices[p.Device] {
+					continue
+				}
+				seenDevices[p.Device] = true
+			}
+
+			uctx, ucancel := context.WithTimeout(context.Background(), 2*time.Second)
+			usage, err := disk.UsageWithContext(uctx, p.Mountpoint)
+			ucancel()
 			if err != nil {
 				continue
 			}
