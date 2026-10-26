@@ -78,10 +78,13 @@ var (
 type secretRule struct {
 	name        string
 	regex       *regexp.Regexp
+	matcher     func(line string) string
 	severity    string
 	description string
 	remediation string
 }
+
+var slackWebhookPattern = regexp.MustCompile(`services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+`)
 
 // secretRules contains regular expressions for hardcoded credentials.
 var secretRules = []secretRule{
@@ -93,8 +96,13 @@ var secretRules = []secretRule{
 		remediation: "Revoke the exposed key in AWS IAM and store credentials in secure secret managers or environment variables.",
 	},
 	{
-		name:        "Slack Webhook",
-		regex:       regexp.MustCompile(`hooks\.slack\.com/services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+`),
+		name: "Slack Webhook",
+		matcher: func(line string) string {
+			if strings.Contains(line, "hooks.slack.com") {
+				return slackWebhookPattern.FindString(line)
+			}
+			return ""
+		},
 		severity:    "medium",
 		description: "Slack Incoming Webhook URL found. Attackers could spam Slack channels or extract workspace info.",
 		remediation: "Revoke the Slack webhook URL and inject it via environment variables or secret vaults.",
@@ -272,8 +280,14 @@ func (a *Auditor) auditFileContent(path string, filename string, findings *[]*au
 
 		// A. Check for hardcoded secrets (CIS-3.12)
 		for _, rule := range secretRules {
-			if rule.regex.MatchString(line) {
-				matched := rule.regex.FindString(line)
+			var matched string
+			if rule.matcher != nil {
+				matched = rule.matcher(line)
+			} else if rule.regex != nil && rule.regex.MatchString(line) {
+				matched = rule.regex.FindString(line)
+			}
+
+			if matched != "" {
 				redacted := matched
 				if len(matched) > 8 {
 					redacted = matched[:4] + "..." + matched[len(matched)-4:]
