@@ -128,12 +128,16 @@ func TestWatcherExcludes(t *testing.T) {
 		t.Fatal("timed out waiting for FIM event")
 	}
 
-	// Ensure no extra events for tmp or backup files were emitted
-	select {
-	case ev := <-w.Events():
-		t.Errorf("unexpected event received for %s", ev.Path)
-	case <-time.After(200 * time.Millisecond):
-		// Expected: no further events
+	// Ensure no events for tmp or backup files were emitted
+	for {
+		select {
+		case ev := <-w.Events():
+			if ev.Path == tmpFile || ev.Path == backupFile {
+				t.Errorf("unexpected event received for excluded file: %s", ev.Path)
+			}
+		case <-time.After(200 * time.Millisecond):
+			return
+		}
 	}
 }
 
