@@ -28,6 +28,12 @@ collectors:
     paths:
       # テスト用監視ディレクトリ (一般ユーザー権限で検証可能)
       - ./test_fim
+  sca:
+    enabled: true
+    scan_on_startup: true        # 起動時に対象ディレクトリのベースライン監査を実行
+    scan_on_fim_events: true     # FIMイベント連動で追加・変更ファイルを即時ピンポイント監査
+    target_paths:
+      - ./test_fim
   logs:
     enabled: true
     paths:
@@ -85,7 +91,7 @@ go build -o twagentneo ./cmd/twagentneo
 起動に成功すると、内蔵 Sigma ルールが OS に合わせて自動ロードされます（macOS の場合は darwin 用ルール 33 件）。
 
 ```text
-twagentneo v0.2.0 starting — os=darwin arch=arm64
+twagentneo v0.3.0 starting — os=darwin arch=arm64
 agent id=twagentneo-test name=Local-TestHost
 [sigma] engine ready: os=darwin rules=33
 [sigma] loaded 33 rules for darwin
@@ -170,7 +176,50 @@ echo "192.168.1.100 - - [22/Oct/2026:05:00:00 +0900] \"GET /../../etc/passwd HTT
 
 ---
 
-## 5. テスト完了後のクリーンアップ
+## 5. SCA (セキュリティ設定監査) のテスト
+
+SCA コレクターは、起動時のベースライン走査および FIM イベント連動（`scan_on_fim_events: true`）でファイル権限や平文シークレットを即時監査します。
+
+ターミナル 2 で、`test_fim` ディレクトリに各種セキュリティ不備を持つファイルを作成します。
+
+### 5.1 危険なパーミッション (World-Writable ファイル) の検知 (CIS-3.14)
+誰でも書き込み可能なファイルを作成します：
+```bash
+touch test_fim/world_writable.txt
+chmod 666 test_fim/world_writable.txt
+```
+**検知ログ:**
+```text
+[sca] FIM-triggered scan on test_fim/world_writable.txt found 1 issues
+[alert] security alert: rule=CIS-3.14-001 title="World-Writable File Detected" level=medium category=sca source=test_fim/world_writable.txt
+```
+
+### 5.2 平文シークレット・APIキー露出の検知 (CIS-3.12)
+平文の API キー（例: AWS Access Key ID 形式）を含む設定ファイルを作成します：
+```bash
+echo "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE" > test_fim/app_config.env
+```
+**検知ログ:**
+```text
+[sca] FIM-triggered scan on test_fim/app_config.env found 1 issues
+[alert] security alert: rule=CIS-3.12-001 title="Exposed Secret or Token Found" level=high category=sca source=test_fim/app_config.env
+```
+*(ログや証跡に出力されるシークレット内容は自動マスキングされます)*
+
+### 5.3 放置されたバックアップ・一時ファイルの検知 (CIS-4.7)
+機密情報が残存しやすい放置バックアップファイルを作成します：
+```bash
+echo "DATABASE_PASSWORD=secret" > test_fim/database.conf.bak
+```
+**検知ログ:**
+```text
+[sca] FIM-triggered scan on test_fim/database.conf.bak found 2 issues
+[alert] security alert: rule=CIS-4.7-001 title="Leftover Backup or Temporary File Found" level=low category=sca source=test_fim/database.conf.bak
+```
+
+---
+
+## 6. テスト完了後のクリーンアップ
 
 テスト用の一時ファイルやログをリセットする場合は以下を実行します：
 

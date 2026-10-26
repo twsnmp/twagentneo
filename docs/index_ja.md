@@ -16,15 +16,16 @@ layout: default
 
 **twagentneo** は、Windows、Linux、macOS で軽快に動作する **TWSNMP NEO** 向けの次世代クロスプラットフォーム監視 & AI セキュリティエージェントです。
 
-ホストリソース（CPU、メモリ、ディスク、ロードアベレージ）やネットワーク状態（ネットワークインターフェース、ARPテーブル、TCP接続宛先）の定期監視に加え、ファイル整合性監視（FIM）および OS セキュリティログの収集・監査を自律的に行います。
+ホストリソース（CPU、メモリ、ディスク、ロードアベレージ）やネットワーク状態（ネットワークインターフェース、ARPテーブル、TCP接続宛先）の定期監視に加え、ファイル整合性監視（FIM）、セキュリティ設定監査（SCA）、および OS セキュリティログの収集・監査を自律的に行います。
 
 ログの監査には、TWSLA で実績のある **Sigma 評価エンジン** を Pure Go で内蔵。さらに検知された疑わしいイベントに対しては、Go 製の組み込みローカル LLM パッケージ **`tensai`** を活用した **LLM-as-a-Judge によるインテリジェントトリアージ** を端末ローカルで自律実行します。
 
 ### 主な特徴
-- **Pure Go シングルバイナリ (`CGO_ENABLED=0`)**: 外部 C ライブラリへの依存が一切なく、1 つのバイナリを配置するだけで即座に稼働。
+- **Pure Go シングルバイナリ (`CGO_ENABLED=0`)**: 外部 C ライブラリへの依存が一切なく、1 つのバイナリを配置するだけで即座に稼働。依存パッケージの脆弱性（CVE-2025-10543）に対処し安全性を維持。
 - **2段階ハイブリッド脅威監査 (Sigma × tensai)**:
   - **第1層 (超高速・超低負荷)**: 内蔵の厳選 Sigma ルールにより、毎秒数千行のログから疑わしいイベントのみをミリ秒単位で高速抽出。
   - **第2層 (インテリジェントローカル判定)**: 抽出されたイベントに対し、端末ローカルで動作する `tensai` が前後コンテキストを踏まえて誤検知排除・脅威スコアリング・日本語での推奨対処手順（アドバイザリ）を付与。
+- **セキュリティ設定監査 (SCA)**: Pure Go による CIS ベンチマーク準拠の設定・権限監査（World-Writable、秘密鍵/.env、残存バックアップファイル、平文シークレット、sshd/sysctl）を起動時ベースラインおよび FIM 連動リアルタイムで自動実行。
 - **Windows サービス & Linux systemd 対応**: `twagentneo service` コマンドによる OS ネイティブのバックグラウンド常駐サービス化、自動起動、ライフサイクル管理をサポート。
 - **ゼロコンフィグ運用**: OS（Linux、macOS、Windows）に応じた主要 Sigma ルールをバイナリ内蔵（`embed.FS`）。外部ルールファイルを用意することなく起動直後から脅威監視を開始。
 - **OS 自動判定による極小リソースフットプリント**: 起動時に実行環境の OS を自動認識し、必要なルールのみをインデックス化。アイドル時 CPU 1% 未満、常駐メモリ 30〜50MB 程度の極めて軽量な動作を実現。
@@ -45,6 +46,7 @@ twagentneo は、軽量なコレクター層、高速なイベントバス、2�
 |  |                 コレクター層 (Pure Go / Native OS)                |  |
 |  |  [Host Resource]   [ARP / Interface]   [TCP Connections]          |  |
 |  |  [FIM (fsnotify)]  [Log Tailer (auth, secure, install, EventLog)] |  |
+|  |  [SCA: セキュリティ設定監査 (CIS基準 / 平文シークレット検知)]     |  |
 |  +-------------------------------------------------------------------+  |
 |                                  |                                      |
 |                                  v (Raw Logs / Events)                  |
@@ -173,6 +175,15 @@ collectors:
     excludes:                   # 除外パターン（ワイルドカード・Glob対応、デフォルト: *.tmp, *~）
       - "*.tmp"
       - "*~"
+  sca:
+    enabled: true
+    scan_on_startup: true        # 起動時にベースライン全件スキャンを実行
+    scan_on_fim_events: true     # FIMの追加/変更/chmod検知時に即時ピンポイント監査
+    interval: 0s                 # 定期スキャン（0sで無効、イベント駆動）
+    target_paths:                # スキャン対象ディレクトリ（未指定時はデフォルト）
+      - /etc
+    max_files: 2000
+    max_file_size: 1048576       # 1MB
   logs:
     enabled: true
     paths:                      # 追加のカスタム監視ログパス（空時はOS標準ログを監視）
@@ -225,7 +236,7 @@ exporters:
 Pure Go のシステムコールおよび `/proc`・OS API 経由でホストリソースを取得します：
 - **CPU 使用率**: 全体およびコアごとの使用状況
 - **メモリ**: トータル、使用中、空き容量、使用率 (%)
-- **ディスク**: ルートおよびマウントポイントごとの使用率 (%)
+- **ディスク**: ルートおよびマウントポイントごとの使用率 (%)。不要な擬似ファイルシステム（`proc`, `sysfs`, `cgroup`, `devtmpfs`, `snap`/`squashfs`, kubernetes empty-dir、光学ドライブ・仮想ISO、読み取り専用メディア等）を自動除外し、重複デバイスをインテリジェントに集約。
 - **ロードアベレージ**: 1分、5分、15分の負荷平均
 - **しきい値アラート**: 設定値を超過した場合、即座にリソースアラートイベントを発行。
 
@@ -241,7 +252,16 @@ Pure Go のシステムコールおよび `/proc`・OS API 経由でホストリ
 - 重要システムファイル（`/etc/passwd`, `/etc/shadow`, Windows `System32` 等）の不正改ざんを即座にアラート化。
 - **除外パターン (`excludes`)**: 一時ファイル（`*.tmp` やエディタ作業用バックアップ `*~` 等）をフィルタリングし、過剰な誤アラートを抑制（デフォルトで `*.tmp` および `*~` が除外対象）。
 
-### 5.4 OS ログ監視 (`logs`)
+### 5.4 セキュリティ設定監査 (`sca`)
+CIS ベンチマーク基準に基づき、ローカルホストの設定ファイル、ファイル権限、平文シークレットを監査します：
+- **ファイルアクセス権限 (CIS-3.14)**: World-Writable ファイル（`0002`）、秘密鍵（`id_rsa`, `*.pem`, `*.key`）や環境設定（`.env`）の過剰な読み取り権限、`/etc/shadow` の不適切な権限を検知。
+- **残存バックアップ・一時ファイル (CIS-4.7)**: 機密情報が残存しやすい放置バックアップ・一時ファイル（`.bak`, `.old`, `.temp`, `.tmp`, `*~`）を検知。
+- **平文シークレット漏洩 (CIS-3.12)**: AWS Access Key、Slack Webhook、Private Key、データベースパスワード等の平文露出を正規表現走査（証跡は自動マスキング）。
+- **OS・サービス設定監査 (CIS-4.1, CIS-4.8)**: SSH設定（`sshd_config` の `PermitRootLogin`, `PasswordAuthentication`, `Protocol 1`）や Linux カーネルパラメータ（`sysctl.conf` の `net.ipv4.ip_forward`, `accept_redirects`）を監査。
+- **スキャン実行タイミング**: 起動時ベースラインスキャン (`scan_on_startup: true`)、FIM連動リアルタイム監査 (`scan_on_fim_events: true`）、定期スキャン (`interval`)。
+- **ローカルLLM連携**: 重大な設定不備はローカル LLM (`tensai`) に渡され、環境文脈を踏まえた脅威度評価と日本語の具体的修正コマンドを自動付与。
+
+### 5.5 OS ログ監視 (`logs`)
 OS 標準のセキュリティイベントログを自動識別して末尾追跡（Tail）します：
 - **Linux**: `/var/log/auth.log`, `/var/log/secure`, `/var/log/syslog`
 - **macOS**: `/var/log/install.log`, `/var/log/system.log`
@@ -290,6 +310,8 @@ MQTT エクスポーターは、TWSNMP NEO のイベントパイプラインに�
 {topic_prefix}/{agent_id}/status      # エージェント死活・ステータス (LWT) [エイリアス: heartbeat]
 ```
 
+> **セキュアなテレメトリ送信**: 依存ライブラリの脆弱性（CVE-2025-10543）に対処した最新の Pure Go 製 `paho.mqtt.golang` (v1.5.1+) を採用し、TLS 暗号化通信 (`tls://`) およびブローカー認証によるセキュアかつ堅牢なテレメトリ送信を提供します。
+
 ### 7.2 Syslog (RFC 5424 / RFC 3164)
 既存の SIEM や TWSNMP NEO の Syslog レシーバーに対して、構造化データ付きの標準 Syslog メッセージを UDP / TCP で転送します。
 
@@ -309,7 +331,7 @@ MQTT エクスポーターは、TWSNMP NEO のイベントパイプラインに�
 ```bash
 twagentneo -version
 # 出力例:
-# twagentneo v0.2.0 (commit: abc1234, built: 2026-10-23T06:00:00Z, darwin/arm64)
+# twagentneo v0.3.0 (commit: abc1234, built: 2026-10-27T05:00:00Z, darwin/arm64)
 ```
 
 ### 8.2 セルフアップデートコマンド
@@ -327,7 +349,7 @@ twagentneo update
 twagentneo update -y
 
 # 特定のバージョンを指定して更新
-twagentneo update -version v0.2.0
+twagentneo update -version v0.3.0
 ```
 
 > **環境認識機能**: Homebrew 経由でインストールされている場合は `brew upgrade` を促し、コンテナ環境ではイメージ再取得を案内するなど、実行環境に応じた最適な更新方法を提示します。
@@ -392,6 +414,21 @@ touch /tmp/test_audit.log
 echo "Oct 22 10:00:00 server sudo[1234]: pam_unix(sudo:auth): authentication failure; logname=test uid=1000 euid=0 tty=/dev/pts/0 ruser=test rhost= user=root" >> /tmp/test_audit.log
 ```
 内蔵 Sigma ルールがマッチし、`tensai` による日本語トリアージ結果と脅威スコアが付与されたアラートが発行されます。
+
+### 9.3 セキュリティ設定監査 (SCA) テスト
+FIM連動（`scan_on_fim_events: true`）が有効な状態で、不備を持つ設定ファイルを配置します：
+
+```bash
+# config.yaml の collectors.sca.target_paths に /tmp/fim_test を指定
+
+# 1. 危険なパーミッション（World-Writable ファイル）のテスト (CIS-3.14)
+touch /tmp/fim_test/insecure.txt
+chmod 666 /tmp/fim_test/insecure.txt
+
+# 2. 平文シークレット露出のテスト (CIS-3.12)
+echo "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE" > /tmp/fim_test/.env
+```
+FIMイベントの発生と連動して対象ファイルが即座にピンポイント監査され、CISベンチマークIDおよび自動マスキングされた証跡を含む `[sca]` アラートが即時発行されます。
 
 ---
 

@@ -218,7 +218,7 @@ iso(1).org(3).dod(6).internet(1).private(4).enterprises(1).twise(17862)
 ## 6. 送信プロトコル仕様 (Exporters)
 
 ### 6.1 MQTT (`exporter/mqtt`)
-- Pure Go MQTTライブラリ使用。
+- Pure Go MQTTライブラリ使用（`paho.mqtt.golang` v1.5.1+、CVE-2025-10543 対処済み）。
 - トピック設計:
   - メトリクス: `twsnmpneo/agent/{agent_id}/metrics`
   - インターフェイス: `twsnmpneo/agent/{agent_id}/interface`

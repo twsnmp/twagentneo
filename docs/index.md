@@ -16,15 +16,16 @@ Next-Generation Pure Go Cross-Platform Monitoring & AI Security Agent for TWSNMP
 
 **twagentneo** is a lightweight, high-performance, cross-platform monitoring and AI security agent designed for **TWSNMP NEO** (as well as FC/FK), running natively on Linux, macOS, and Windows.
 
-Beyond traditional monitoring of host resources (CPU, Memory, Disk, Load Average) and network telemetry (network interfaces, ARP tables, outbound TCP connections), twagentneo autonomously performs File Integrity Monitoring (FIM) and local security log auditing.
+Beyond traditional monitoring of host resources (CPU, Memory, Disk, Load Average) and network telemetry (network interfaces, ARP tables, outbound TCP connections), twagentneo autonomously performs File Integrity Monitoring (FIM), Security Configuration Assessment (SCA), and local security log auditing.
 
 For log auditing, twagentneo integrates a Pure Go **Sigma evaluation engine** ported from production implementations in TWSLA. Furthermore, suspicious events trigger an intelligent **LLM-as-a-Judge local triage** powered by the embedded Go-native LLM package **`tensai`**, running entirely on-device without external cloud dependencies.
 
 ### Core Highlights
-- **Pure Go Single Binary (`CGO_ENABLED=0`)**: Zero external C library dependencies. Runs instantly across Linux, macOS, and Windows with static linking.
+- **Pure Go Single Binary (`CGO_ENABLED=0`)**: Zero external C library dependencies. Runs instantly across Linux, macOS, and Windows with static linking and hardened dependencies (MQTT security update for CVE-2025-10543).
 - **Two-Tier Hybrid Threat Auditing (Sigma × tensai)**:
   - **Tier 1 (Sub-millisecond / Ultra-low Footprint)**: Built-in curated Sigma rules filter high-volume incoming log streams down to candidate suspicious events within milliseconds.
   - **Tier 2 (Intelligent Local Triage)**: Evaluates candidate events locally using the embedded LLM engine `tensai` to assess real threats, eliminate false positives, score risk (0-100), and generate actionable remediation advisories.
+- **Security Configuration Assessment (SCA)**: Pure Go security auditing engine for CIS benchmark compliance (file permissions, exposed secrets, leftover backup files, sshd/sysctl baselines) triggered at startup and in real time on FIM events.
 - **Windows Service & Linux systemd Integration**: Native background service installation, automatic startup on boot, and complete lifecycle management via `twagentneo service` commands.
 - **Zero-Configuration Operation**: Curated Sigma rules for Linux, macOS, and Windows are directly embedded into the binary via `embed.FS`. No external rule management required.
 - **OS-Adaptive Selective Loading**: Automatically inspects `runtime.GOOS` on boot to index only relevant platform rules, keeping idle CPU usage below 1% and resident memory footprint within 30–50MB.
@@ -45,6 +46,7 @@ twagentneo is organized into modular collectors, a high-throughput event pipelin
 |  |                 Collectors (Pure Go / Native OS)                  |  |
 |  |  [Host Resource]   [ARP / Interface]   [TCP Connections]          |  |
 |  |  [FIM (fsnotify)]  [Log Tailer (auth, secure, install, EventLog)] |  |
+|  |  [SCA: Security Configuration Assessment (CIS / Secrets)]        |  |
 |  +-------------------------------------------------------------------+  |
 |                                  |                                      |
 |                                  v (Raw Logs / Events)                  |
@@ -173,6 +175,15 @@ collectors:
     excludes:                   # Exclude patterns (glob patterns, default: *.tmp, *~)
       - "*.tmp"
       - "*~"
+  sca:
+    enabled: true
+    scan_on_startup: true        # Run baseline scan across target paths on agent startup
+    scan_on_fim_events: true     # Immediately audit individual files on FIM create/write/chmod
+    interval: 0s                 # Periodic scan interval (default: 0s disabled, event-driven)
+    target_paths:                # Target config directories to audit
+      - /etc
+    max_files: 2000
+    max_file_size: 1048576       # 1MB
   logs:
     enabled: true
     paths:                      # Optional custom log files (empty = OS defaults)
@@ -225,7 +236,7 @@ exporters:
 Acquires host metrics via native system calls and `/proc` without external CLI invocations:
 - **CPU**: System and per-core utilization percentages.
 - **Memory**: Total, used, free, and memory utilization percentage.
-- **Disk**: Root and per-mount filesystem utilization percentages.
+- **Disk**: Root and per-mount filesystem utilization percentages with smart exclusion (skips pseudo-filesystems such as `proc`, `sysfs`, `cgroup`, `devtmpfs`, `snap`/`squashfs`, kubernetes empty-dir, optical/CD-ROM/UDF, and read-only media) and device deduplication.
 - **Load Average**: 1m, 5m, and 15m load metrics.
 - **Threshold Alerts**: Triggers immediate resource alerts if values exceed configured limits.
 
@@ -241,7 +252,16 @@ Watches target paths recursively using `fsnotify` and OS-native kernel notificat
 - Safeguards critical system binaries and configuration paths (`/etc`, `/usr/bin`, Windows `System32`).
 - **Exclusion Filters (`excludes`)**: Filters out transient scratch files (e.g., `*.tmp`, editor backup files `*~`) to prevent alert fatigue (defaults to `["*.tmp", "*~"]`).
 
-### 5.4 OS Log Tailer (`logs`)
+### 5.4 Security Configuration Assessment (`sca`)
+Audits local system configuration files, permissions, and sensitive credential exposure aligned with CIS Benchmarks:
+- **File Access Permissions (CIS-3.14)**: Detects world-writable files (`0002`), insecure private keys (`id_rsa`, `*.pem`, `*.key`) or environment files (`.env`) with broad read permissions, and unauthorized access to `/etc/shadow`.
+- **Leftover Backup & Temporary Files (CIS-4.7)**: Discovers forgotten temporary or backup files containing sensitive configurations (`.bak`, `.old`, `.temp`, `.tmp`, `*~`).
+- **Plaintext Secrets Leakage (CIS-3.12)**: Scans for exposed AWS access keys, Slack webhooks, private keys, database passwords (evidence is masked automatically).
+- **OS & Service Hardening Baseline (CIS-4.1, CIS-4.8)**: Evaluates SSH daemon configuration (`sshd_config` `PermitRootLogin`, `PasswordAuthentication`, `Protocol 1`) and Linux kernel parameters (`sysctl.conf` `net.ipv4.ip_forward`, `accept_redirects`).
+- **Trigger Modes**: Startup baseline scanning (`scan_on_startup: true`), real-time pinpoint audit driven by FIM create/modify/chmod events (`scan_on_fim_events: true`), and optional periodic scans (`interval`).
+- **AI Triage Integration**: High-risk findings are evaluated by `tensai` to supply contextual environmental threat severity and actionable remediation commands.
+
+### 5.5 OS Log Tailer (`logs`)
 Follows OS security event logs automatically:
 - **Linux**: `/var/log/auth.log`, `/var/log/secure`, `/var/log/syslog`
 - **macOS**: `/var/log/install.log`, `/var/log/system.log`
@@ -290,6 +310,8 @@ Telemetry is streamed across dedicated MQTT topics tailored for TWSNMP NEO's ing
 {topic_prefix}/{agent_id}/status      # Agent status / heartbeat / LWT [alias: heartbeat]
 ```
 
+> **Secure Telemetry Transport**: Built on `paho.mqtt.golang` v1.5.1+ with upstream vulnerability mitigations (including CVE-2025-10543), supporting robust TLS encryption (`tls://`) and authenticated broker connections.
+
 ### 7.2 Syslog (RFC 5424 / RFC 3164)
 Exports RFC-compliant structured syslog datagrams to enterprise SIEM collectors or TWSNMP NEO's syslog receiver via UDP/TCP.
 
@@ -309,7 +331,7 @@ Emits SNMPv2c / SNMPv3 traps using the enterprise MIB tree (OID: `.1.3.6.1.4.1.1
 ```bash
 twagentneo -version
 # Sample output:
-# twagentneo v0.2.0 (commit: abc1234, built: 2026-10-23T06:00:00Z, darwin/arm64)
+# twagentneo v0.3.0 (commit: abc1234, built: 2026-10-27T05:00:00Z, darwin/arm64)
 ```
 
 ### 8.2 Self-Updating CLI
@@ -327,7 +349,7 @@ twagentneo update
 twagentneo update -y
 
 # Update to a specific release version
-twagentneo update -version v0.2.0
+twagentneo update -version v0.3.0
 ```
 
 > **Smart Environment Detection**: If installed via Homebrew, `twagentneo` advises running `brew upgrade`. Inside Docker containers, it suggests pulling the latest image tag.
@@ -388,6 +410,19 @@ touch /tmp/test_audit.log
 echo "Oct 22 10:00:00 server sudo[1234]: pam_unix(sudo:auth): authentication failure; logname=test uid=1000 euid=0 tty=/dev/pts/0 ruser=test rhost= user=root" >> /tmp/test_audit.log
 ```
 The internal Sigma rule triggers, `tensai` evaluates the candidate alert, and an enriched alert with risk score and advisory is published.
+
+### 9.3 Security Configuration Assessment (SCA) Test
+```bash
+# Add /tmp/fim_test to collectors.sca.target_paths with scan_on_fim_events: true
+
+# 1. World-writable file test (CIS-3.14)
+touch /tmp/fim_test/insecure.txt
+chmod 666 /tmp/fim_test/insecure.txt
+
+# 2. Exposed secret / token test (CIS-3.12)
+echo "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE" > /tmp/fim_test/.env
+```
+FIM triggers an instant pinpoint audit on the modified file, issuing a structured `[sca]` security alert with CIS benchmark mapping and masked secret evidence.
 
 ---
 

@@ -221,7 +221,7 @@ iso(1).org(3).dod(6).internet(1).private(4).enterprises(1).twise(17862)
 All exporters are built using Pure Go packages with zero CGO dependencies.
 
 ### 6.1 MQTT (`exporter/mqtt`)
-- Pure Go MQTT client (`paho.mqtt.golang`).
+- Pure Go MQTT client (`paho.mqtt.golang` v1.5.1+, with security fixes for CVE-2025-10543).
 - Topic Hierarchy:
   - Metrics: `twsnmpneo/agent/{agent_id}/metrics`
   - Interface: `twsnmpneo/agent/{agent_id}/interface`

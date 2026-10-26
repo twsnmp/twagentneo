@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	version = "v0.2.0"
+	version = "v0.3.0"
 	commit  = ""
 	date    = "unknown"
 
@@ -105,7 +105,7 @@ func handleUpdateCommand(args []string) {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 	checkOnly := fs.Bool("check", false, "Check for available updates without applying")
 	shortCheck := fs.Bool("c", false, "Check for available updates without applying (shorthand)")
-	targetVer := fs.String("version", "", "Update to specified release tag (e.g. 'v0.2.0')")
+	targetVer := fs.String("version", "", "Update to specified release tag (e.g. 'v0.3.0')")
 	yesFlag := fs.Bool("yes", false, "Update without confirmation")
 	shortYes := fs.Bool("y", false, "Update without confirmation (shorthand)")
 	_ = fs.Parse(args)

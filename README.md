@@ -6,11 +6,12 @@ Pure Go, cross-platform security & monitoring agent for TWSNMP NEO with built-in
 
 ## Features
 
-- **Pure Go Single Binary (`CGO_ENABLED=0`)**: Zero external dependencies, runs out of the box across Linux, macOS, and Windows.
+- **Pure Go Single Binary (`CGO_ENABLED=0`)**: Zero external dependencies, runs out of the box across Linux, macOS, and Windows with hardened dependencies (including MQTT security update for CVE-2025-10543).
 - **Embedded Sigma Engine**: Curated security rules embedded via `embed.FS` with zero-maintenance startup.
 - **Local AI Triage**: Built-in LLM judge powered by `tensai` for contextual false-positive suppression and actionable alert enrichment.
+- **Security Configuration Assessment (SCA)**: Pure Go security auditing engine for CIS benchmark compliance (world-writable permissions, private keys/.env exposure, leftover backup files, cleartext secrets, sshd/sysctl) with baseline startup and FIM event-driven triggers.
 - **Windows Service & Linux systemd Integration**: Native background daemon installation and management via simple CLI (`twagentneo service install/start/stop/restart/status/remove`).
-- **Network Traffic & System Telemetry**: Real-time traffic rate calculation (Bytes/Packets in/out rates), ARP inspection, TCP connection tracking, and CPU/memory/disk monitoring.
+- **Network Traffic & System Telemetry**: Real-time traffic rate calculation (Bytes/Packets in/out rates), ARP inspection, TCP connection tracking, and CPU/memory/disk monitoring with smart filesystem exclusion and deduplication.
 - **Self-Updating**: Built-in CLI updater (`twagentneo update`) with Homebrew and container awareness.
 - **Multi-Protocol Telemetry**: Seamless delivery to TWSNMP NEO via MQTT, Syslog, and SNMP TRAP.
 
@@ -76,7 +77,7 @@ twagentneo -config config.yaml -debug
 
 ```bash
 twagentneo -version
-# twagentneo v0.2.0 (commit: abc1234, built: 2026-10-23T06:00:00Z, darwin/arm64)
+# twagentneo v0.3.0 (commit: abc1234, built: 2026-10-27T05:00:00Z, darwin/arm64)
 ```
 
 ### Self-Update
