@@ -60,7 +60,8 @@ func (c *Collector) Start(ctx context.Context) {
 
 	// 2. FIM-driven real-time auditing
 	if c.cfg.ScanOnFIMEvents && c.bus != nil {
-		go c.watchFIMEvents(ctx)
+		sub := c.bus.Subscribe()
+		go c.watchFIMEvents(ctx, sub)
 	}
 
 	// 3. Periodic scan (if interval > 0)
@@ -89,8 +90,7 @@ func (c *Collector) Start(ctx context.Context) {
 }
 
 // watchFIMEvents listens to FIM bus events and triggers immediate scans on created/modified/chmod files.
-func (c *Collector) watchFIMEvents(ctx context.Context) {
-	sub := c.bus.Subscribe()
+func (c *Collector) watchFIMEvents(ctx context.Context, sub *pipeline.Sub) {
 	defer sub.Close()
 
 	for {

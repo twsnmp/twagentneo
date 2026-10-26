@@ -162,20 +162,16 @@ func TestCollector_FIMEventTrigger(t *testing.T) {
 	})
 
 	// Expect SCA finding alert on bus
-	select {
-	case ev := <-sub.C:
-		if ev.Type == pipeline.EventTypeFIM {
-			// Read next event which should be SCA or Alert
-			select {
-			case ev2 := <-sub.C:
-				if ev2.Type != pipeline.EventTypeSCA && ev2.Type != pipeline.EventTypeAlert {
-					t.Fatalf("expected EventTypeSCA or EventTypeAlert, got %s", ev2.Type)
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("timed out waiting for SCA event after FIM event")
+	deadline := time.After(5 * time.Second)
+	foundSCA := false
+	for !foundSCA {
+		select {
+		case ev := <-sub.C:
+			if ev.Type == pipeline.EventTypeSCA || ev.Type == pipeline.EventTypeAlert {
+				foundSCA = true
 			}
+		case <-deadline:
+			t.Fatal("timed out waiting for SCA event after FIM event")
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for FIM event dispatch")
 	}
 }

@@ -94,7 +94,7 @@ var secretRules = []secretRule{
 	},
 	{
 		name:        "Slack Webhook",
-		regex:       regexp.MustCompile(`https://hooks\.slack\.com/services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+`),
+		regex:       regexp.MustCompile(`hooks\.slack\.com/services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+`),
 		severity:    "medium",
 		description: "Slack Incoming Webhook URL found. Attackers could spam Slack channels or extract workspace info.",
 		remediation: "Revoke the Slack webhook URL and inject it via environment variables or secret vaults.",
