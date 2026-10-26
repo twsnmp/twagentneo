@@ -109,6 +109,22 @@ All collectors are implemented strictly in Pure Go without CGO, utilizing OS nat
   - **macOS**: `/var/log/system.log` or Apple Unified Log (OSLog) API
 - Raw lines/records are normalized into structured events and immediately forwarded to the Sigma evaluation pipeline.
 
+#### C. Security Configuration Assessment (SCA)
+- Pure Go security auditing engine (`collector/sca`) assessing local configuration files, permissions, leftover temporary files, and exposed secrets.
+- **Scan Trigger Timings**:
+  - **Startup Baseline Scan (`scan_on_startup: true`)**: Performs a comprehensive scan across configured system directories at agent bootstrap to establish an initial security baseline.
+  - **FIM-Driven Real-Time Auditing (`scan_on_fim_events: true`)**: When FIM detects file creation (`create`), modification (`write`), or permission changes (`chmod`), SCA immediately executes a pinpoint audit against only the modified file. Eliminates background scanning overhead and latency.
+  - **Periodic Scan (`interval`)**: Optional interval scan (default `0s` disabled).
+- **Core Audit Rules (CIS Benchmark Aligned)**:
+  - **File Permissions (CIS-3.14)**: Detects world-writable files (`0002`), loose permissions (`0044`) on private keys (`id_rsa`, `*.pem`, `*.key`) and environment configs (`.env`), and unsecured `/etc/shadow`.
+  - **Leftover & Backup Files (CIS-4.7)**: Detects exposed backup or temporary files (`.bak`, `.old`, `.temp`, `.tmp`, `*~`).
+  - **Plaintext Secrets (CIS-3.12)**: Regex detection for AWS keys, Slack webhooks, unencrypted private keys, and database passwords (with automatic proof masking).
+  - **System & Service Configurations (CIS-4.1, CIS-4.8)**:
+    - SSH (`sshd_config`): `PermitRootLogin`, `PasswordAuthentication`, deprecated `Protocol 1`.
+    - Kernel parameters (`sysctl.conf`): `net.ipv4.ip_forward`, `accept_redirects`.
+- **Local LLM (`tensai`) Integration**:
+  - Critical findings are passed to `engine/audit`'s LLM Judge layer to evaluate situational threat level and synthesize actionable Japanese remediation advice (`ActionJa`).
+
 ---
 
 ## 4. Audit & AI Judge Engine (`engine/audit`)
@@ -245,7 +261,8 @@ twagentneo/
 │   │   ├── resource/
 │   │   ├── network/
 │   │   ├── fim/
-│   │   └── logtail/
+│   │   ├── logtail/
+│   │   └── sca/                     # Security Configuration Assessment (SCA)
 │   ├── audit/                       # Two-tier auditing engine
 │   │   ├── sigma/                   # Ported Pure Go Sigma matcher
 │   │   └── aijudge/                 # tensai package local LLM judge layer
@@ -294,6 +311,15 @@ collectors:
   fim:
     enabled: true
     # excludes: ["*.tmp", "*~"]
+  sca:
+    enabled: true
+    scan_on_startup: true        # Run baseline scan across target paths on agent startup
+    scan_on_fim_events: true     # Immediately audit individual files on FIM create/write/chmod
+    interval: 0s                 # Periodic scan (disabled by default)
+    target_paths:                # Target paths to inspect
+      - /etc
+    max_files: 2000
+    max_file_size: 1048576       # 1MB
   logs:
     enabled: true
 

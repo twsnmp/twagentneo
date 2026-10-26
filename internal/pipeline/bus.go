@@ -21,6 +21,7 @@ const (
 	EventTypeHeartbeat                      // periodic heartbeat
 	EventTypeRawLog                         // raw log line from logtail (pre-Sigma)
 	EventTypeResourceAlert                  // host resource threshold alert
+	EventTypeSCA                            // security configuration audit finding
 )
 
 func (t EventType) String() string {
@@ -43,6 +44,8 @@ func (t EventType) String() string {
 		return "RawLog"
 	case EventTypeResourceAlert:
 		return "ResourceAlert"
+	case EventTypeSCA:
+		return "SCA"
 	default:
 		return "Unknown"
 	}
@@ -178,6 +181,11 @@ func (b *Bus) PublishHeartbeat() {
 // PublishResourceAlert is a convenience helper for resource threshold alert events.
 func (b *Bus) PublishResourceAlert(payload interface{}) {
 	b.Publish(&Event{Type: EventTypeResourceAlert, Timestamp: time.Now(), Payload: payload})
+}
+
+// PublishSCA is a convenience helper for security configuration audit events.
+func (b *Bus) PublishSCA(payload interface{}) {
+	b.Publish(&Event{Type: EventTypeSCA, Timestamp: time.Now(), Payload: payload})
 }
 
 // Subscribe registers a new subscriber and returns a *Sub handle.

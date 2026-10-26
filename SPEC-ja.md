@@ -108,6 +108,22 @@ CGOを一切使用せず、OSネイティブのSyscallおよびGo標準パッケ
   - **Windows**: Windows Event Log API (`EvtSubscribe` / `EvtQuery`)
   - **macOS**: `/var/log/system.log` または Apple Unified Log (OSLog) 連携
 
+#### C. セキュリティ設定監査 (SCA: Security Configuration Assessment)
+- ホストの設定ファイル、ファイル権限、残存ファイル、平文シークレットを監査するPure Goエンジン（`collector/sca`）。
+- **スキャン実行タイミング**:
+  - **起動時ベースラインスキャン (`scan_on_startup: true`)**: エージェント起動時に設定ディレクトリの全件スキャンを実行し、初期状態のセキュリティベースラインを確立。
+  - **FIM連動リアルタイム監査 (`scan_on_fim_events: true`)**: FIMがファイルの追加（`create`）、変更（`write`）、属性変更（`chmod`）を検知した際、対象ファイル単体をピンポイントで即時監査（リアルタイムSCA）。定期走査による負荷とタイムラグを排除。
+  - **定期スキャン (`interval`)**: オプションで指定間隔（例: `24h`）での定期実行も可能（デフォルト `0s` で無効化）。
+- **主要監査項目（CIS Benchmark準拠）**:
+  - **ファイルアクセス権限 (CIS-3.14)**: World-Writableファイル（`0002`）、秘密鍵（`id_rsa`, `*.pem`, `*.key`）や環境設定（`.env`）の緩い権限（`0044`）、`/etc/shadow` の所有者外アクセスを検知。
+  - **残存バックアップ・一時ファイル (CIS-4.7)**: 機密情報が残存しやすいバックアップ・一時ファイル（`.bak`, `.old`, `.temp`, `.tmp`, `*~`）の放置を検知。
+  - **平文シークレット漏洩 (CIS-3.12)**: AWS Access Key、Slack Webhook、Private Key、データベースパスワード等の平文露出を正規表現走査（証跡は自動マスキング）。
+  - **OS・サービス設定監査 (CIS-4.1, CIS-4.8)**:
+    - SSH設定 (`sshd_config`): `PermitRootLogin`、`PasswordAuthentication`、非推奨の `Protocol 1` 等。
+    - Linuxカーネルパラメータ (`sysctl.conf`): `net.ipv4.ip_forward`、`accept_redirects` 等。
+- **ローカルLLM (`tensai`) との統合**:
+  - 検知された重大な設定不備は `engine/audit` のローカルLLM判定層に渡され、環境に応じた脅威度評価と日本語の具体的な修正ガイダンス（推奨コマンド等）を自動付与。
+
 ---
 
 ## 4. 監査・AI判定エンジン仕様 (`engine/audit`)
@@ -242,7 +258,8 @@ twagentneo/
 │   │   ├── resource/
 │   │   ├── network/
 │   │   ├── fim/
-│   │   └── logtail/
+│   │   ├── logtail/
+│   │   └── sca/                     # セキュリティ設定監査 (SCA)
 │   ├── audit/                       # 2段階監査エンジン
 │   │   ├── sigma/                   # TWSLAから移植したSigmaエンジン
 │   │   └── aijudge/                 # tensai パッケージを用いたLLM判定層
@@ -291,6 +308,15 @@ collectors:
   fim:
     enabled: true
     # excludes: ["*.tmp", "*~"]
+  sca:
+    enabled: true
+    scan_on_startup: true        # 起動時にベースライン全件スキャンを実行
+    scan_on_fim_events: true     # FIMの追加/変更/chmod検知時に即時ピンポイント監査
+    interval: 0s                 # 定期スキャン（0sで無効）
+    target_paths:                # スキャン対象ディレクトリ（未指定時はデフォルト）
+      - /etc
+    max_files: 2000
+    max_file_size: 1048576       # 1MB
   logs:
     enabled: true
 

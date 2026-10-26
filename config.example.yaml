@@ -27,6 +27,16 @@ collectors:
       # Exclude temporary or backup file patterns (default: ["*.tmp", "*~"])
       - "*.tmp"
       - "*~"
+  sca:
+    enabled: true
+    scan_on_startup: true        # Run baseline scan across target paths on agent startup
+    scan_on_fim_events: true     # Immediately audit individual files on FIM create/write/chmod
+    interval: 0s                 # Periodic scan interval (default: 0s disabled, event-driven)
+    target_paths:
+      # Target config directories to audit
+      - /etc
+    max_files: 2000
+    max_file_size: 1048576       # 1MB
   logs:
     enabled: true
     paths:

@@ -48,12 +48,24 @@ type LogsCollectorConfig struct {
 	Paths   []string `mapstructure:"paths"`
 }
 
+// SCACollectorConfig holds configuration for the Security Configuration Assessment collector.
+type SCACollectorConfig struct {
+	Enabled         bool          `mapstructure:"enabled"`
+	ScanOnStartup   bool          `mapstructure:"scan_on_startup"`
+	ScanOnFIMEvents bool          `mapstructure:"scan_on_fim_events"`
+	Interval        time.Duration `mapstructure:"interval"`
+	TargetPaths     []string      `mapstructure:"target_paths"`
+	MaxFiles        int           `mapstructure:"max_files"`
+	MaxFileSize     int64         `mapstructure:"max_file_size"`
+}
+
 // CollectorsConfig groups all collector configurations.
 type CollectorsConfig struct {
 	Resource ResourceCollectorConfig `mapstructure:"resource"`
 	Network  NetworkCollectorConfig  `mapstructure:"network"`
 	FIM      FIMCollectorConfig      `mapstructure:"fim"`
 	Logs     LogsCollectorConfig     `mapstructure:"logs"`
+	SCA      SCACollectorConfig      `mapstructure:"sca"`
 }
 
 // SigmaConfig holds Sigma rule engine configuration.
@@ -160,6 +172,12 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("collectors.fim.enabled", true)
 	v.SetDefault("collectors.fim.excludes", []string{"*.tmp", "*~"})
 	v.SetDefault("collectors.logs.enabled", true)
+	v.SetDefault("collectors.sca.enabled", true)
+	v.SetDefault("collectors.sca.scan_on_startup", true)
+	v.SetDefault("collectors.sca.scan_on_fim_events", true)
+	v.SetDefault("collectors.sca.interval", "0s")
+	v.SetDefault("collectors.sca.max_files", 2000)
+	v.SetDefault("collectors.sca.max_file_size", int64(1048576))
 	v.SetDefault("audit.sigma.enabled", true)
 	v.SetDefault("audit.ai_judge.enabled", false)
 	v.SetDefault("audit.ai_judge.timeout", "5s")

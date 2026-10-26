@@ -28,6 +28,7 @@ import (
 	"github.com/twsnmp/twagentneo/internal/collector/logtail"
 	"github.com/twsnmp/twagentneo/internal/collector/network"
 	"github.com/twsnmp/twagentneo/internal/collector/resource"
+	"github.com/twsnmp/twagentneo/internal/collector/sca"
 	"github.com/twsnmp/twagentneo/internal/config"
 	"github.com/twsnmp/twagentneo/internal/exporter"
 	"github.com/twsnmp/twagentneo/internal/pipeline"
@@ -604,6 +605,14 @@ func runAgent(ctx context.Context, configPath string, debugFlag bool) error {
 		}()
 	}
 
+	// --- SCA (Security Configuration Assessment) Collector ---
+	if cfg.Collectors.SCA.Enabled {
+		debugLog("starting SCA collector (startup: %v, fim_events: %v, interval: %v)",
+			cfg.Collectors.SCA.ScanOnStartup, cfg.Collectors.SCA.ScanOnFIMEvents, cfg.Collectors.SCA.Interval)
+		scaCollector := sca.New(cfg.Collectors.SCA, bus, judge)
+		scaCollector.Start(ctx)
+	}
+
 	// --- Heartbeat Ticker ---
 	wg.Add(1)
 	go func() {
@@ -721,7 +730,7 @@ func dispatchEvent(
 		if !ok {
 			return
 		}
-		log.Printf("[alert] sigma alert: rule=%s title=%q level=%s category=%s source=%s",
+		log.Printf("[alert] security alert: rule=%s title=%q level=%s category=%s source=%s",
 			alert.RuleID, alert.RuleTitle, alert.Level, alert.Category, alert.SourceLog)
 		if alert.AIJudge != nil {
 			log.Printf("[alert] ai judge: is_threat=%v compliance_violated=%v summary=%s",
@@ -739,6 +748,14 @@ func dispatchEvent(
 			_ = trapExp.SendSecurityAlert(alert)
 			debugLog("[dispatch] snmptrap alert sent")
 		}
+
+	case pipeline.EventTypeSCA:
+		finding, ok := ev.Payload.(*audit.SCAFinding)
+		if !ok {
+			return
+		}
+		debugLog("[dispatch] sca finding received: rule=%s title=%q path=%s level=%s",
+			finding.RuleID, finding.Title, finding.FilePath, finding.Severity)
 
 	case pipeline.EventTypeResourceAlert:
 		ra, ok := ev.Payload.(*audit.ResourceAlert)

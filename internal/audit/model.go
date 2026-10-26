@@ -66,6 +66,41 @@ type FIMEvent struct {
 	Hash      string    `json:"hash,omitempty"` // SHA-256 hex digest (empty for remove)
 }
 
+// SCAFinding represents a single security issue detected during local configuration auditing.
+type SCAFinding struct {
+	Timestamp   time.Time              `json:"timestamp"`
+	RuleID      string                 `json:"rule_id"`     // e.g. "CIS-4.1", "CIS-3.14"
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Severity    string                 `json:"severity"`    // "info", "low", "medium", "high", "critical"
+	FilePath    string                 `json:"file_path"`
+	Proof       string                 `json:"proof"`       // redacted proof or line match
+	Remediation string                 `json:"remediation,omitempty"`
+	Compliance  []string               `json:"compliance,omitempty"` // e.g. ["CIS", "PCI-DSS"]
+
+	// AIJudge is populated if evaluated by tensai LLM judge
+	AIJudge     *AIJudgeResult         `json:"ai_judge,omitempty"`
+}
+
+// ToSecurityAlert converts an SCAFinding into a unified SecurityAlert for exporting.
+func (f *SCAFinding) ToSecurityAlert() *SecurityAlert {
+	return &SecurityAlert{
+		Timestamp: f.Timestamp,
+		RuleID:    f.RuleID,
+		RuleTitle: f.Title,
+		Level:     f.Severity,
+		Category:  "Configuration Audit",
+		SourceLog: f.FilePath,
+		MatchedData: map[string]interface{}{
+			"description": f.Description,
+			"proof":       f.Proof,
+			"remediation": f.Remediation,
+			"compliance":  f.Compliance,
+		},
+		AIJudge: f.AIJudge,
+	}
+}
+
 // ResourceAlert is produced when a host resource threshold is exceeded.
 type ResourceAlert struct {
 	Timestamp time.Time `json:"timestamp"`
