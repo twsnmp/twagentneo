@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/bradleyjkemp/sigma-go v0.6.6
-	github.com/eclipse/paho.mqtt.golang v1.5.0
+	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/elastic/go-grok v0.3.1
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/gosnmp/gosnmp v1.45.0
