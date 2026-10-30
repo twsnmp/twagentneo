@@ -37,3 +37,4 @@ dist/
 config.yaml
 test.log
 test_fim/
+.DS_Store
